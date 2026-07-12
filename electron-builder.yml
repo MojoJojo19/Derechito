@@ -1,0 +1,38 @@
+appId: com.loscafichos.derechito
+productName: DERECHITO
+copyright: Copyright © 2026 Los Cafichos
+
+directories:
+  output: release
+
+files:
+  - out/**/*
+  - resources/**/*
+
+win:
+  target:
+    - nsis          
+  icon: resources/icon.png
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DERECHITO
+  installerIcon: resources/icon.png
+  uninstallerIcon: resources/icon.png
+
+mac:
+  target:
+    - dmg
+  icon: resources/icon.png
+  category: public.app-category.healthcare-fitness
+
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: resources/icon.png
+  category: Healthcare
