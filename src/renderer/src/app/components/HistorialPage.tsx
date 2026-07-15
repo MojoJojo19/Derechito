@@ -376,7 +376,7 @@ export function HistorialPage() {
   const hasData = chartData.length > 0 || dailyLog.length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col text-sm">
+    <div className="h-screen bg-gray-50 flex flex-col text-sm overflow-hidden">
       {/* Top bar */}
       <div className="bg-white border-b border-gray-200 flex items-center justify-between px-6 py-2.5 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -672,17 +672,6 @@ export function HistorialPage() {
         </main>
       </div>
 
-      {/* Bottom bar */}
-      <div className="bg-white border-t border-gray-200 flex items-center justify-between px-6 py-2 flex-shrink-0">
-        <div className="flex items-center gap-4 text-gray-400 text-[11px]">
-          <span>&#x25CF; DERECHITO v1.0</span>
-          <span>&#x25CF; CPU: {cpu}% - RAM: {ram.usedMB} MB</span>
-          <span>&#x25CF; MediaPipe Pose v0.10 - 30 fps</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-green-500 text-[11px] font-medium">
-          <Cloud className="w-3 h-3" /> Sync activo
-        </div>
-      </div>
 
       {showLogout && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">

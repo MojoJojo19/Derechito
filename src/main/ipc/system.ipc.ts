@@ -56,11 +56,18 @@ export function registerSystemIPC() {
     }
   })
 
-  // Suspend PC
+  // Suspend PC (more reliable method using powrprof.dll)
   ipcMain.handle('suspend-pc', () => {
     if (process.platform === 'win32') {
-      exec('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"', (err) => {
-        if (err) console.error('Failed to suspend PC:', err)
+      // Use rundll32 powrprof.dll which is more reliable than PowerShell SetSuspendState
+      exec('rundll32.exe powrprof.dll,SetSuspendState 0,1,0', (err) => {
+        if (err) {
+          console.error('Failed to suspend PC via powrprof, trying fallback:', err)
+          // Fallback: lock the workstation at minimum
+          exec('rundll32.exe user32.dll,LockWorkStation', (err2) => {
+            if (err2) console.error('Failed to lock screen as fallback:', err2)
+          })
+        }
       })
     } else if (process.platform === 'darwin') {
       exec('pmset sleepnow', (err) => {
@@ -68,7 +75,12 @@ export function registerSystemIPC() {
       })
     } else {
       exec('systemctl suspend', (err) => {
-        if (err) console.error('Failed to suspend:', err)
+        if (err) {
+          // Fallback for Linux
+          exec('loginctl lock-session', (err2) => {
+            if (err2) console.error('Failed to suspend/lock:', err2)
+          })
+        }
       })
     }
   })

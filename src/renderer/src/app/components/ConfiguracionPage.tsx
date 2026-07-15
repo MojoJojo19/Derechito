@@ -4,7 +4,7 @@ import {
   Cloud, Clock, Cpu, Monitor, History, Settings,
   RotateCcw, LogOut, User, PlayCircle, Bell,
   Check, X, Shield, Sliders, RefreshCw, Download,
-  Trash2, ChevronRight, ChevronDown, Zap, Target, Edit2,
+  Trash2, ChevronRight, ChevronDown, Zap, Target, Edit2, Eye, EyeOff,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { useSystemMetrics } from "../../hooks/useSystemMetrics";
@@ -162,9 +162,10 @@ export function ConfiguracionPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const [precisionOpen, setPrecisionOpen] = useState(true);
+  const [showRigorousConfirm, setShowRigorousConfirm] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
 
-  const { baselineProfile, sessionStartTime, userProfile, setUserProfile, alertMode, setAlertMode } = useAppStore();
+  const { baselineProfile, sessionStartTime, userProfile, setUserProfile, alertMode, setAlertMode, eyeDetectionEnabled, setEyeDetectionEnabled, eyeSuspendThreshold, setEyeSuspendThreshold } = useAppStore();
   const { cpu } = useSystemMetrics();
 
   // Local state for profile edits
@@ -180,27 +181,13 @@ export function ConfiguracionPage() {
     toast.success("Perfil actualizado correctamente");
   };
 
-  const handleExportCSV = () => {
-    const rows = [
-      ["Fecha", "Postura correcta %", "Alertas", "Sesion (min)", "Posicion del cuello", "Alineacion de cabeza"],
-      ["2026-06-23", "94", "1", "135", "Ideal", "Correcta"],
-      ["2026-06-22", "91", "1", "260", "Ideal", "Correcta"],
-    ];
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "derechito_historial.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+  const applyMode = (mode: string) => {
+    if (mode === "riguroso") {
+      setAlertMode("rigorous");
+      toast.success("Modo Riguroso activado");
+    }
   };
 
-  const handleDeleteAll = () => {
-    setShowDeleteConfirm(false);
-    alert("Todos los datos han sido eliminados. Cerrando sesion...");
-    navigate("/");
-  };
 
   useEffect(() => {
     if (!showNotifications) return;
@@ -231,7 +218,7 @@ export function ConfiguracionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col text-sm">
+    <div className="h-screen bg-gray-50 flex flex-col text-sm overflow-hidden">
 
       {/* Top bar */}
       <div className="bg-white border-b border-gray-200 flex items-center justify-between px-6 py-2.5 flex-shrink-0">
@@ -414,7 +401,7 @@ export function ConfiguracionPage() {
 
                   {/* Modo Riguroso */}
                   <button
-                    onClick={() => { setAlertMode("rigorous"); toast.success("Modo Riguroso activado"); }}
+                    onClick={() => { setShowRigorousConfirm(true); }}
                     className={`flex-1 rounded-xl p-4 border-2 text-left transition-all ${
                       alertMode === "rigorous"
                         ? "border-[#7c3aed] bg-purple-50"
@@ -436,6 +423,49 @@ export function ConfiguracionPage() {
                     </p>
                   </button>
                 </div>
+              </div>
+
+              {/* Detección de ojos */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600">
+                    <Eye className="w-4 h-4" />
+                  </div>
+                  <span className="font-semibold text-gray-900 text-sm">Deteccion de ojos</span>
+                </div>
+                <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+                  Si el sistema detecta que tus ojos estan cerrados por mucho tiempo (posiblemente dormido), suspendera automaticamente el equipo para ahorrar energia.
+                </p>
+
+                <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    {eyeDetectionEnabled ? <Eye className="w-4 h-4 text-purple-600" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
+                    <div>
+                      <div className="text-xs font-semibold text-gray-800">Suspension automatica</div>
+                      <div className="text-[10px] text-gray-500">Suspender PC si detecta ojos cerrados</div>
+                    </div>
+                  </div>
+                  <Toggle value={eyeDetectionEnabled} onChange={(v) => { setEyeDetectionEnabled(v); toast.success(v ? 'Detección de ojos activada' : 'Detección de ojos desactivada'); }} />
+                </div>
+
+                {eyeDetectionEnabled && (
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">Umbral de tiempo (segundos con ojos cerrados)</label>
+                    <select
+                      value={eyeSuspendThreshold}
+                      onChange={(e) => { setEyeSuspendThreshold(Number(e.target.value)); toast.success(`Umbral cambiado a ${e.target.value}s`); }}
+                      className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-800 bg-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    >
+                      <option value={10}>10 segundos — Muy sensible</option>
+                      <option value={15}>15 segundos — Recomendado</option>
+                      <option value={20}>20 segundos — Moderado</option>
+                      <option value={30}>30 segundos — Relajado</option>
+                    </select>
+                    <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
+                      Si tus ojos permanecen cerrados por {eyeSuspendThreshold} segundos consecutivos, el equipo se suspendera automaticamente.
+                    </p>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -546,139 +576,68 @@ export function ConfiguracionPage() {
                   </div>
                 )}
               </div>
-              
-              {/* Alertas y notificaciones */}
-              <Card title="Avisos y recordatorios" icon={<Bell className="w-4 h-4" />}>
-                <div className="space-y-3">
-                  {[
-                    { label: "Alertas visuales", sub: "Banner en pantalla", emoji: "🔔", value: visualAlerts, set: setVisualAlerts },
-                    { label: "Alertas sonoras",  sub: "Bip suave tras 30 s", emoji: "🔊", value: soundAlerts,  set: setSoundAlerts  },
-                    { label: "Pausas activas",   sub: "Recordatorio cada 2 h", emoji: "🌿", value: activeBreaks, set: setActiveBreaks },
-                  ].map(({ label, sub, emoji, value, set }) => (
-                    <div key={label} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-base">{emoji}</span>
-                        <div>
-                          <div className="text-xs font-medium text-gray-800">{label}</div>
-                          <div className="text-[10px] text-gray-500">{sub}</div>
-                        </div>
-                      </div>
-                      <Toggle value={value} onChange={set} />
-                    </div>
-                  ))}
-                </div>
-              </Card>
 
               {/* Privacidad garantizada */}
               <Card title="Tus datos estan protegidos" icon={<Shield className="w-4 h-4" />}>
-                <div className="space-y-2.5">
-                  {[
-                    "Procesamiento 100% local",
-                    "Solo historial estadistico sincronizado",
-                    "Datos corporales anonimizados y eliminados",
-                    "Video no capturado ni almacenado",
-                  ].map((item) => (
-                    <div key={item} className="flex items-start gap-2">
-                      <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Check className="w-2.5 h-2.5 text-green-600" strokeWidth={3} />
-                      </div>
-                      <span className="text-xs text-gray-700">{item}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 bg-blue-50 border border-blue-100 rounded-lg p-3">
-                  <div className="text-[10px] text-blue-700 leading-relaxed">
-                    DERECHITO cumple con GDPR y CCPA. Puedes exportar o eliminar tus datos en cualquier momento desde tu perfil de cuenta.
+                <div className="flex gap-3 text-gray-500">
+                  <Shield className="w-8 h-8 text-green-500 flex-shrink-0" />
+                  <div className="text-[11px] leading-relaxed">
+                    Todo el analisis postural se realiza localmente en tu equipo usando inteligencia artificial optimizada. 
+                    <strong className="text-gray-700"> Ningun video ni imagen es enviado a la nube.</strong>
                   </div>
                 </div>
               </Card>
-              
-              {/* Gestión de datos */}
-              <Card title="Mis datos" icon={<Download className="w-4 h-4" />}>
-                <div className="space-y-1">
-                  <button
-                    onClick={handleExportCSV}
-                    className="w-full flex items-center justify-between px-3 py-3 rounded-lg hover:bg-blue-50 transition-colors group"
-                  >
-                    <div className="flex items-center gap-2 text-gray-700 group-hover:text-[#0033CC]">
-                      <Download className="w-4 h-4 text-[#0033CC]" />
-                      <div className="text-left">
-                        <div className="text-xs font-medium">Exportar historial (CSV)</div>
-                        <div className="text-[10px] text-gray-400">Descarga tus datos posturales de los ultimos 30 dias</div>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-[#0033CC]" />
-                  </button>
-
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="w-full flex items-center justify-between px-3 py-3 rounded-lg hover:bg-red-50 transition-colors group"
-                  >
-                    <div className="flex items-center gap-2 text-red-500">
-                      <Trash2 className="w-4 h-4" />
-                      <div className="text-left">
-                        <div className="text-xs font-medium">Eliminar todos los datos</div>
-                        <div className="text-[10px] text-red-300">Esta accion es irreversible</div>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-red-400" />
-                  </button>
-                </div>
-              </Card>
-
-              {/* Delete confirmation modal */}
-              {showDeleteConfirm && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-2xl shadow-2xl p-6 w-80 mx-4">
-                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Trash2 className="w-6 h-6 text-red-500" />
-                    </div>
-                    <h3 className="text-base font-bold text-gray-900 text-center mb-2">
-                      Eliminar todos los datos
-                    </h3>
-                    <p className="text-xs text-gray-500 text-center leading-relaxed mb-5">
-                      Se eliminara permanentemente tu historial postural, perfil ergonomico y configuracion. Esta accion no se puede deshacer.
-                    </p>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setShowDeleteConfirm(false)}
-                        className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={handleDeleteAll}
-                        className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors"
-                      >
-                        Eliminar todo
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </main>
       </div>
 
+      {showRigorousConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-84 mx-4" style={{ maxWidth: "360px" }}>
+            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6 text-purple-600" />
+            </div>
+            <h3 className="text-sm font-bold text-gray-900 text-center mb-2">Activar Modo Riguroso</h3>
+            <p className="text-xs text-gray-600 text-center leading-relaxed mb-3">
+              En este modo, <strong>la pantalla se bloqueara</strong> cada vez que recibas una alerta o ejercicio de estiramiento, hasta que lo completes.
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  <strong>Ten en cuenta:</strong> este modo puede interrumpirte en medio de un proceso critico que estes realizando en otro programa (como una videollamada, una presentacion o un archivo sin guardar).
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowRigorousConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => { applyMode("riguroso"); setShowRigorousConfirm(false); }}
+                className="flex-1 py-2.5 rounded-xl bg-[#7c3aed] hover:bg-[#6d28d9] text-white text-sm font-semibold transition-colors"
+              >
+                Activar de todas formas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showLogout && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-72 mx-4">
-            <div className="w-11 h-11 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <LogOut className="w-5 h-5 text-gray-600" />
-            </div>
-            <h3 className="text-sm font-bold text-gray-900 text-center mb-1">Cerrar sesion</h3>
+            <h3 className="text-base font-bold text-gray-900 text-center mb-2">Cerrar sesion</h3>
             <p className="text-xs text-gray-500 text-center leading-relaxed mb-5">
-              Tu sesion activa se pausara. Podras retomar el monitoreo cuando vuelvas a iniciar sesion.
+              ¿Estas seguro que deseas salir? El monitoreo postural se pausara.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setShowLogout(false)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                Cancelar
-              </button>
-              <button onClick={() => navigate("/")} className="flex-1 py-2.5 rounded-xl bg-[#0033CC] hover:bg-[#0029A3] text-white text-sm font-semibold transition-colors">
-                Cerrar sesion
-              </button>
+              <button onClick={() => setShowLogout(false)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button onClick={() => navigate("/")} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors">Cerrar sesion</button>
             </div>
           </div>
         </div>

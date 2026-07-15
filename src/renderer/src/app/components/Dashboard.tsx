@@ -8,7 +8,7 @@ interface DashboardProps {
 export function Dashboard({ userName = "Demo" }: DashboardProps) {
   const navigate = useNavigate();
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0033CC] via-[#0044EE] to-[#1a5fff] flex flex-col">
+    <div className="h-screen bg-gradient-to-br from-[#0033CC] via-[#0044EE] to-[#1a5fff] flex flex-col overflow-hidden">
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-2">
@@ -85,17 +85,6 @@ export function Dashboard({ userName = "Demo" }: DashboardProps) {
         </div>
       </div>
 
-      {/* Bottom status bar */}
-      <div className="flex items-center justify-between px-6 py-3 border-t border-white/10">
-        <div className="flex items-center gap-4 text-white/40 text-[11px]">
-          <span>● DERECHITO v1.0</span>
-          <span>● CPU: 14% - RAM: 812 MB</span>
-          <span>● MediaPipe Pose v0.10 - 30 fps</span>
-        </div>
-        <div className="text-white/40 text-[11px]">
-          demo@derechito.app
-        </div>
-      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Cloud, Monitor, Clock, Cpu, History, Settings,
   PauseCircle, PlayCircle, RotateCcw, LogOut, Check,
-  User, AlertTriangle, Bell, X, Eye, EyeOff,
+  User, AlertTriangle, Bell, X, Eye, EyeOff, Zap, Shield,
 } from "lucide-react";
 import { useSystemMetrics } from "../../hooks/useSystemMetrics";
 import { usePoseDetector } from "../../hooks/usePoseDetector";
@@ -11,26 +11,47 @@ import { usePostureAlert } from "../../hooks/usePostureAlert";
 import { useEyeDetector } from "../../hooks/useEyeDetector";
 import { useAppStore } from "../../store/useAppStore";
 import { calculateCervicalAngle, calculateShoulderTilt, calculateHeadProjection, calculatePostureScore, calculateTrunkLean, calculateHeadPitch, classifyPosture, PostureMetrics } from "../../utils/ergonomics";
+import nivel1 from "../../imports/Nivel_1__Cr_tico_.png";
+import nivel2 from "../../imports/Nivel_2__Deficiente_.png";
+import nivel3 from "../../imports/Nivel_3__Inadecuado_.png";
+import nivel4 from "../../imports/Nivel_4__Mejorable_.png";
+import nivel5 from "../../imports/Nivel_5__Saludable_.png";
+import nivel6 from "../../imports/Nivel_6__Perfecta_.png";
 
+/* ─── Posture level image indicator ─── */
+const LEVELS = [
+  { min: 0,  max: 40,  img: nivel1, color: "text-red-600",    bg: "bg-red-50",    border: "border-red-200",    label: "Critico",   msg: "¡Tu espalda está sufriendo, necesitas moverte ya!" },
+  { min: 41, max: 55,  img: nivel2, color: "text-orange-600", bg: "bg-orange-50", border: "border-orange-200", label: "Deficiente",msg: "Vas camino a la rigidez. ¡Endérezate un poco!" },
+  { min: 56, max: 65,  img: nivel3, color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-200", label: "Inadecuado",msg: "Estás perdiendo la forma. ¡Un pequeño ajuste ayuda!" },
+  { min: 66, max: 75,  img: nivel4, color: "text-lime-600",   bg: "bg-lime-50",   border: "border-lime-200",   label: "Mejorable", msg: "No está mal, vas por un buen camino." },
+  { min: 76, max: 90,  img: nivel5, color: "text-green-600",  bg: "bg-green-50",  border: "border-green-200",  label: "Saludable", msg: "¡Muy bien! Tu cuerpo te lo agradece." },
+  { min: 91, max: 100, img: nivel6, color: "text-emerald-600",bg: "bg-emerald-50",border: "border-emerald-200",label: "Perfecto",  msg: "¡Nivel Leyenda! Postura de manual." },
+];
 
-/* ─── Circular score gauge ─── */
-function ScoreGauge({ score, label }: { score: number; label: string }) {
-  const r = 54;
-  const circ = 2 * Math.PI * r;
-  const fill = circ * (score / 100);
-  return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-36 h-36">
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 128 128">
-          <circle cx="64" cy="64" r={r} stroke="#e5e7eb" strokeWidth="10" fill="none" />
-          <circle cx="64" cy="64" r={r} stroke="#0033CC" strokeWidth="10" fill="none"
-            strokeDasharray={`${fill} ${circ}`} strokeLinecap="round" />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-3xl font-bold text-gray-900">{score}</span>
+function PostureLevel({ score, paused }: { score: number; paused: boolean }) {
+  const level = LEVELS.find((l) => score >= l.min && score <= l.max) ?? LEVELS[5];
+  if (paused) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-2">
+        <div className="w-28 h-36 flex items-center justify-center opacity-30">
+          <img src={nivel5} alt="pausado" className="w-full h-full object-contain" />
         </div>
+        <span className="text-xs text-gray-400 font-medium">Monitor en pausa</span>
       </div>
-      <span className="mt-1 text-sm font-semibold text-[#0033CC]">{label}</span>
+    );
+  }
+  return (
+    <div className="flex flex-col items-center gap-2 py-1">
+      <div className="w-28 h-36">
+        <img src={level.img} alt={level.label} className="w-full h-full object-contain drop-shadow-sm" />
+      </div>
+      <div className="text-center px-1">
+        <div className={`text-xs font-bold mb-0.5 ${level.color}`}>{level.label}</div>
+        <div className="text-[10px] text-gray-500 leading-snug">{level.msg}</div>
+      </div>
+      <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-bold ${level.color} ${level.bg} ${level.border}`}>
+        {score} <span className="font-normal text-[10px]">pts</span>
+      </div>
     </div>
   );
 }
@@ -138,11 +159,11 @@ export function MonitorDashboard() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { landmarks, analyze } = usePoseDetector(videoRef, canvasRef);
   
-  const { baselineProfile, sessionStats, notifications, setSessionStartTime, alertMode } = useAppStore();
+  const { baselineProfile, sessionStats, notifications, setSessionStartTime, alertMode, eyeDetectionEnabled, eyeSuspendThreshold } = useAppStore();
   const [currentMetrics, setCurrentMetrics] = useState<PostureMetrics | null>(null);
 
-  // Eye detection
-  const { eyesOpen, closedSeconds, isReady: eyeReady, warningActive } = useEyeDetector(videoRef, running);
+  // Eye detection — pass enabled/threshold from store
+  const { eyesOpen, closedSeconds, isReady: eyeReady, warningActive } = useEyeDetector(videoRef, running, eyeDetectionEnabled, eyeSuspendThreshold);
 
   // Hook for triggering alerts
   usePostureAlert(currentMetrics, running);
@@ -293,7 +314,7 @@ export function MonitorDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col text-sm">
+    <div className="h-screen bg-gray-50 flex flex-col text-sm overflow-hidden">
 
       {/* ── Top bar ── */}
       <div className="bg-white border-b border-gray-200 flex items-center justify-between px-6 py-2.5 flex-shrink-0">
@@ -304,6 +325,16 @@ export function MonitorDashboard() {
           <span className="text-[#0033CC] font-bold tracking-widest">DERECHITO</span>
         </div>
         <div className="flex items-center gap-3">
+          {/* Mode badge */}
+          {alertMode === 'rigorous' ? (
+            <div className="flex items-center gap-1.5 text-purple-700 text-xs font-bold bg-purple-50 border border-purple-300 px-3 py-1.5 rounded-full">
+              <Zap className="w-3 h-3" /> Modo Riguroso · Alerta en 3s
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-blue-600 text-xs font-medium bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full">
+              <Shield className="w-3 h-3" /> Modo Estándar · Alerta en 15s
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-green-600 text-xs font-medium bg-green-50 border border-green-200 px-3 py-1.5 rounded-full">
             <Cloud className="w-3 h-3" /> Sincronizado
           </div>
@@ -321,7 +352,7 @@ export function MonitorDashboard() {
               "bg-yellow-50 border border-yellow-200 text-yellow-600"
             }`}>
               {eyesOpen ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-              {warningActive ? `¡Bloqueando en ${Math.max(0, 15 - Math.round(closedSeconds))}s!` :
+              {warningActive ? `¡Suspendiendo en ${Math.max(0, eyeSuspendThreshold - Math.round(closedSeconds))}s!` :
                eyesOpen ? "Ojos OK" : `Cerrados ${Math.round(closedSeconds)}s`}
             </div>
           )}
@@ -483,7 +514,11 @@ export function MonitorDashboard() {
                   </div>
                 </div>
 
-                <div className="relative bg-[#0e1520] rounded-xl overflow-hidden" style={{ aspectRatio: "4/3" }}>
+                <div className={`relative rounded-xl overflow-hidden transition-all ${
+                  alertMode === 'rigorous' && !postureOk && running
+                    ? 'ring-3 ring-purple-500 ring-offset-2 animate-pulse bg-[#0e1520]'
+                    : 'bg-[#0e1520]'
+                }`} style={{ aspectRatio: "4/3" }}>
                   <div className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-white text-[10px] font-bold px-2.5 py-1 rounded-full z-10 ${running ? "bg-red-600" : "bg-gray-600"}`}>
                     <div className={`w-1.5 h-1.5 bg-white rounded-full ${running ? "animate-pulse" : ""}`} />
                     {running ? "EN VIVO" : "EN PAUSA"}
@@ -491,10 +526,18 @@ export function MonitorDashboard() {
                   <div className="absolute top-3 right-3 bg-black/50 text-white text-[10px] font-bold px-2 py-1 rounded z-10">
                     {running ? "30 FPS" : "--"}
                   </div>
-                  <div className="absolute top-3 left-3 w-6 h-6 border-l-2 border-t-2 border-[#00E5BE] rounded-tl" />
-                  <div className="absolute top-3 right-3 w-6 h-6 border-r-2 border-t-2 border-[#00E5BE] rounded-tr" />
-                  <div className="absolute bottom-3 left-3 w-6 h-6 border-l-2 border-b-2 border-[#00E5BE] rounded-bl" />
-                  <div className="absolute bottom-3 right-3 w-6 h-6 border-r-2 border-b-2 border-[#00E5BE] rounded-br" />
+                  {/* Corner markers — purple in rigorous mode with bad posture */}
+                  {(() => {
+                    const cornerColor = alertMode === 'rigorous' && !postureOk && running ? 'border-purple-500' : 'border-[#00E5BE]';
+                    return (
+                      <>
+                        <div className={`absolute top-3 left-3 w-6 h-6 border-l-2 border-t-2 ${cornerColor} rounded-tl`} />
+                        <div className={`absolute top-3 right-3 w-6 h-6 border-r-2 border-t-2 ${cornerColor} rounded-tr`} />
+                        <div className={`absolute bottom-3 left-3 w-6 h-6 border-l-2 border-b-2 ${cornerColor} rounded-bl`} />
+                        <div className={`absolute bottom-3 right-3 w-6 h-6 border-r-2 border-b-2 ${cornerColor} rounded-br`} />
+                      </>
+                    );
+                  })()}
                   <div className={`absolute inset-0 flex items-center justify-center transition-opacity ${running ? "opacity-100" : "opacity-30"}`}>
                     <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover -scale-x-100" />
                     <canvas ref={canvasRef} width={640} height={480} className="absolute inset-0 w-full h-full -scale-x-100" />
@@ -509,15 +552,9 @@ export function MonitorDashboard() {
 
               {/* Right panel */}
               <div className="w-64 flex-shrink-0 flex flex-col gap-3">
-                <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col items-center gap-2">
-                  <ScoreGauge score={running ? score : 0} label={running ? scoreLabel : "Pausado"} />
-                  {running && (
-                    <div className={`w-full text-center text-[11px] font-semibold px-3 py-1.5 rounded-lg ${
-                      score >= 90 ? "bg-green-50 text-green-700" : score >= 75 ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-600"
-                    }`}>
-                      {score >= 90 ? "Excelente — sigue así" : score >= 75 ? "Buena — pequeñas correcciones" : "Mejorable — corrige tu postura"}
-                    </div>
-                  )}
+                <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col items-center">
+                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 self-start">Tu nivel postural</div>
+                  <PostureLevel score={running ? score : 0} paused={!running} />
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                   <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Como estas ahora</div>

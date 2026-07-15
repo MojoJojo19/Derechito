@@ -59,6 +59,9 @@ export function usePostureAlert(
 
     // Determine the time threshold based on configuration
     const timeThresholdSec = alertMode === 'rigorous' ? 3 : 15;
+    // Rigorous: shorter cooldown (3s vs 10s) and slower counter decay
+    const cooldownSec = alertMode === 'rigorous' ? 3 : 10;
+    const decayFactor = alertMode === 'rigorous' ? 0.7 : 2;
 
     // Classify posture
     const postureState = classifyPosture(currentMetrics, baselineProfile, alertMode);
@@ -74,16 +77,20 @@ export function usePostureAlert(
       // If we crossed the threshold
       if (badPostureSeconds.current >= timeThresholdSec) {
         
-        const alertTitle = '¡Postura encorvada detectada!';
+        const alertTitle = alertMode === 'rigorous' 
+          ? '⚠️ ¡ALERTA RIGUROSA — Postura incorrecta!'
+          : '¡Postura encorvada detectada!';
         const alertDesc = alertMode === 'rigorous' 
-          ? `¡Detección rigurosa! Endereza tu espalda y cuello de inmediato.`
+          ? `¡Detección rigurosa! Llevas ${Math.round(badPostureSeconds.current)}s encorvado. ¡Enderézate YA!`
           : `Llevas más de ${timeThresholdSec}s encorvado. ¡Siéntate derecho!`;
-        const alertBody = 'Tu cabeza o tus hombros están caídos hacia el frente.';
+        const alertBody = alertMode === 'rigorous'
+          ? `Modo riguroso activo. Tu cabeza o hombros están caídos hacia el frente. Corrige inmediatamente.`
+          : 'Tu cabeza o tus hombros están caídos hacia el frente.';
         
         // Trigger alert!
         toast.error(alertTitle, {
           description: alertDesc,
-          duration: 5000,
+          duration: alertMode === 'rigorous' ? 8000 : 5000,
         });
         
         // Add real notification to store
@@ -105,13 +112,18 @@ export function usePostureAlert(
         
         incrementAlerts();
         
-        // Reset counter after alert
-        badPostureSeconds.current = 0;
+        // Reset counter after alert (cooldown depends on mode)
+        badPostureSeconds.current = -cooldownSec;
       }
     } else {
-      // User corrected posture. Decrease the counter gradually instead of instant reset
-      // This prevents a single frame of jitter from resetting the entire timer.
-      badPostureSeconds.current = Math.max(0, badPostureSeconds.current - (dt / 1000) * 2);
+      // User corrected posture.
+      if (badPostureSeconds.current > 0) {
+        // Decrease the counter — rigorous mode decays much slower (harder to "reset" by briefly sitting straight)
+        badPostureSeconds.current = Math.max(0, badPostureSeconds.current - (dt / 1000) * decayFactor);
+      } else if (badPostureSeconds.current < 0) {
+        // Recover from cooldown slowly
+        badPostureSeconds.current = Math.min(0, badPostureSeconds.current + (dt / 1000));
+      }
     }
   }, [currentMetrics, isRunning, alertMode, baselineProfile, addSessionTime, incrementAlerts, addNotification]);
 }

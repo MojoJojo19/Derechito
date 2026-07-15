@@ -82,7 +82,7 @@ export function LearningModePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col text-sm">
+    <div className="h-screen bg-gray-50 flex flex-col text-sm overflow-hidden">
 
       {/* Top bar */}
       <div className="bg-white border-b border-gray-200 flex items-center justify-between px-6 py-2.5 flex-shrink-0">
@@ -112,7 +112,7 @@ export function LearningModePage() {
         </div>
       </div>
 
-      <div className="flex-1 p-6 flex gap-6 max-w-5xl mx-auto w-full">
+      <div className="flex-1 p-6 flex gap-6 max-w-5xl mx-auto w-full overflow-auto">
 
         {/* Left — camera + progress */}
         <div className="flex-1 flex flex-col gap-4">

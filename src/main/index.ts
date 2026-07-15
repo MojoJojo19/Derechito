@@ -12,10 +12,13 @@ let mainWindow: BrowserWindow | null = null
 function createWindow(): void {
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 800,
+    width: 1024,
+    height: 768,
     minWidth: 1024,
     minHeight: 768,
+    minimizable: false,
+    maximizable: true,
+    resizable: true,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),

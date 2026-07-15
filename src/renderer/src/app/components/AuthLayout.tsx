@@ -7,10 +7,11 @@ export function AuthLayout() {
   const isSignup = location.pathname === "/signup";
 
   return (
-    <div className="min-h-screen flex">
+    <div className="h-screen flex overflow-hidden">
+
 
       {/* ── Panel izquierdo ── */}
-      <div className="hidden lg:flex w-[420px] flex-shrink-0 relative overflow-hidden">
+      <div className="hidden md:flex w-[420px] flex-shrink-0 relative overflow-hidden">
         <img
           src={leftPanelImg}
           alt="Tu postura monitoreada en tiempo real"
@@ -20,28 +21,28 @@ export function AuthLayout() {
       </div>
 
       {/* ── Panel derecho ── */}
-      <div className="flex-1 bg-gray-50 flex flex-col items-center justify-center p-8">
+      <div className="flex-1 bg-gray-50 flex flex-col items-center justify-center p-4 min-h-0">
 
-        {/* Logo grande — ocupa la parte superior */}
-        <div className="flex flex-col items-center mb-6">
+        {/* Logo compacto */}
+        <div className="flex flex-col items-center mb-3 flex-shrink-0">
           <img
             src={logoImg}
             alt="Derechito — monitor postural inteligente"
-            className="w-72 h-72 object-contain drop-shadow-sm"
+            className="w-40 h-40 object-contain drop-shadow-sm"
           />
-          <span className="text-[#0033CC] font-extrabold text-3xl tracking-widest uppercase mt-2">
+          <span className="text-[#0033CC] font-extrabold text-2xl tracking-widest uppercase mt-1">
             DERECHITO
           </span>
-          <span className="text-gray-400 text-xs font-medium mt-1 tracking-wide">Monitor Postural Inteligente</span>
+          <span className="text-gray-400 text-[11px] font-medium mt-0.5 tracking-wide">Monitor Postural Inteligente</span>
         </div>
 
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm flex-shrink-0">
 
           {/* Tabs */}
-          <div className="bg-white rounded-xl p-1.5 flex mb-6 shadow-sm border border-gray-200">
+          <div className="bg-white rounded-xl p-1 flex mb-4 shadow-sm border border-gray-200">
             <Link
               to="/"
-              className={`flex-1 text-center py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors ${
                 !isSignup
                   ? "bg-[#0033CC] text-white shadow-sm"
                   : "text-gray-500 hover:text-gray-800"
@@ -51,7 +52,7 @@ export function AuthLayout() {
             </Link>
             <Link
               to="/signup"
-              className={`flex-1 text-center py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex-1 text-center py-2 rounded-lg text-sm font-medium transition-colors ${
                 isSignup
                   ? "bg-[#0033CC] text-white shadow-sm"
                   : "text-gray-500 hover:text-gray-800"

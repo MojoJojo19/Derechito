@@ -56,16 +56,22 @@ interface EyeDetectorResult {
   ear: number; // Current Eye Aspect Ratio
   closedSeconds: number; // How long eyes have been closed
   isReady: boolean;
-  warningActive: boolean; // True when we're about to lock
+  warningActive: boolean; // True when we're about to suspend
 }
 
 /**
  * Hook that detects eye closure using MediaPipe FaceLandmarker.
- * If eyes are closed for more than `thresholdSeconds`, it locks the screen.
+ * If eyes are closed for more than `thresholdSeconds`, it suspends the PC.
+ * 
+ * @param videoRef - Ref to the video element
+ * @param isRunning - Whether monitoring is active
+ * @param enabled - Whether eye detection is enabled (from store)
+ * @param thresholdSeconds - Seconds of closed eyes before suspending (from store)
  */
 export function useEyeDetector(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   isRunning: boolean,
+  enabled: boolean = true,
   thresholdSeconds: number = 15
 ): EyeDetectorResult {
   const [faceLandmarker, setFaceLandmarker] = useState<FaceLandmarker | null>(null)
@@ -76,7 +82,8 @@ export function useEyeDetector(
   
   const closedStartTime = useRef<number | null>(null)
   const lastAnalysisTime = useRef(0)
-  const hasLockedRecently = useRef(false)
+  const hasSuspendedRecently = useRef(false)
+  const suspendRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const warningShown = useRef(false)
   const lastVideoTime = useRef(-1)
   const addNotification = useAppStore((s) => s.addNotification)
@@ -110,9 +117,18 @@ export function useEyeDetector(
     return () => { active = false }
   }, [])
 
+  // Clean up retry timer on unmount
+  useEffect(() => {
+    return () => {
+      if (suspendRetryTimer.current) {
+        clearTimeout(suspendRetryTimer.current)
+      }
+    }
+  }, [])
+
   // Analyze eye state - runs at lower frequency than pose (every 500ms)
   const analyzeEyes = useCallback((timestamp: number) => {
-    if (!faceLandmarker || !videoRef.current || !isRunning) return
+    if (!faceLandmarker || !videoRef.current || !isRunning || !enabled) return
     
     // Only run every 500ms to save CPU
     if (timestamp - lastAnalysisTime.current < 500) return
@@ -148,35 +164,45 @@ export function useEyeDetector(
           const elapsed = (Date.now() - closedStartTime.current) / 1000
           setClosedSeconds(elapsed)
           
-          // Warning at 10 seconds (5 seconds before lock)
-          if (elapsed >= thresholdSeconds - 5 && !warningShown.current) {
+          // Warning 5 seconds before suspend
+          const warningAt = Math.max(thresholdSeconds - 5, thresholdSeconds * 0.6)
+          if (elapsed >= warningAt && !warningShown.current) {
             warningShown.current = true
             setWarningActive(true)
+            const remaining = Math.ceil(thresholdSeconds - elapsed)
             toast.warning('¡Ojos cerrados detectados!', {
-              description: `Si no abres los ojos en 5 segundos, se bloqueará la pantalla.`,
+              description: `Si no abres los ojos en ${remaining} segundos, se suspenderá el equipo.`,
               duration: 5000,
             })
           }
           
-          // Lock screen after threshold
-          if (elapsed >= thresholdSeconds && !hasLockedRecently.current) {
-            hasLockedRecently.current = true
+          // Suspend PC after threshold
+          if (elapsed >= thresholdSeconds && !hasSuspendedRecently.current) {
+            hasSuspendedRecently.current = true
             
             addNotification({
               type: 'info',
               title: 'Equipo suspendido',
-              body: `Se detectaron ojos cerrados por más de ${thresholdSeconds}s. El equipo se suspendió.`,
+              body: `Se detectaron ojos cerrados por más de ${thresholdSeconds}s. El equipo se suspendió automáticamente.`,
             })
             
-            // Call IPC to suspend PC
+            toast.info('Suspendiendo equipo...', {
+              description: 'Se detectaron ojos cerrados prolongadamente. El PC se suspenderá ahora.',
+              duration: 3000,
+            })
+
+            // First attempt to suspend
             if (window.api?.suspendPC) {
               window.api.suspendPC()
+              
+              // Retry after 3 seconds in case the first attempt was blocked
+              suspendRetryTimer.current = setTimeout(() => {
+                if (hasSuspendedRecently.current && window.api?.suspendPC) {
+                  console.log('Retrying PC suspend...')
+                  window.api.suspendPC()
+                }
+              }, 3000)
             }
-            
-            toast.info('Equipo suspendido', {
-              description: 'Se detectaron ojos cerrados prolongadamente.',
-              duration: 5000,
-            })
           }
         } else {
           // Eyes open - reset everything
@@ -184,17 +210,23 @@ export function useEyeDetector(
           setClosedSeconds(0)
           setWarningActive(false)
           warningShown.current = false
-          hasLockedRecently.current = false
+          hasSuspendedRecently.current = false
+          
+          // Clear any pending retry
+          if (suspendRetryTimer.current) {
+            clearTimeout(suspendRetryTimer.current)
+            suspendRetryTimer.current = null
+          }
         }
       }
     } catch (err) {
       // Silently ignore frame errors
     }
-  }, [faceLandmarker, videoRef, isRunning, thresholdSeconds, addNotification])
+  }, [faceLandmarker, videoRef, isRunning, enabled, thresholdSeconds, addNotification])
 
   // Run analysis loop
   useEffect(() => {
-    if (!isRunning || !faceLandmarker) return
+    if (!isRunning || !faceLandmarker || !enabled) return
     
     let animationFrameId: number
     const loop = () => {
@@ -203,7 +235,18 @@ export function useEyeDetector(
     }
     loop()
     return () => cancelAnimationFrame(animationFrameId)
-  }, [analyzeEyes, isRunning, faceLandmarker])
+  }, [analyzeEyes, isRunning, faceLandmarker, enabled])
+
+  // When disabled, return safe defaults
+  if (!enabled) {
+    return {
+      eyesOpen: true,
+      ear: 0.3,
+      closedSeconds: 0,
+      isReady: !!faceLandmarker,
+      warningActive: false,
+    }
+  }
 
   return {
     eyesOpen,
@@ -213,3 +256,4 @@ export function useEyeDetector(
     warningActive,
   }
 }
+

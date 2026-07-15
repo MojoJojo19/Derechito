@@ -19,6 +19,12 @@ interface AppState {
   alertMode: 'standard' | 'rigorous';
   setAlertMode: (mode: 'standard' | 'rigorous') => void;
 
+  // Eye detection config
+  eyeDetectionEnabled: boolean;
+  setEyeDetectionEnabled: (enabled: boolean) => void;
+  eyeSuspendThreshold: number; // seconds
+  setEyeSuspendThreshold: (seconds: number) => void;
+
   baselineProfile: PostureMetrics | null;
   setBaselineProfile: (profile: PostureMetrics) => void;
   clearBaseline: () => void;
@@ -56,6 +62,11 @@ export const useAppStore = create<AppState>()(
       
       alertMode: 'standard',
       setAlertMode: (mode) => set({ alertMode: mode }),
+
+      eyeDetectionEnabled: true,
+      setEyeDetectionEnabled: (enabled) => set({ eyeDetectionEnabled: enabled }),
+      eyeSuspendThreshold: 15,
+      setEyeSuspendThreshold: (seconds) => set({ eyeSuspendThreshold: seconds }),
 
       baselineProfile: null,
       setBaselineProfile: (profile) => set({ baselineProfile: profile }),
