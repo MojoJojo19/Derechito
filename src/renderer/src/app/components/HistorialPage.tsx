@@ -7,8 +7,8 @@ import {
   FileText, FileSpreadsheet, ChevronDown,
 } from "lucide-react";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend
 } from "recharts";
 
 /* ─── Sidebar shared shell ─── */
@@ -117,33 +117,41 @@ function Sidebar({
 
 /* ─── Chart data ─── */
 const weekData = [
-  { day: "Lun", pct: 79 },
-  { day: "Mar", pct: 83 },
-  { day: "Mie", pct: 80 },
-  { day: "Jue", pct: 88 },
-  { day: "Vie", pct: 85 },
-  { day: "Sab", pct: 84 },
-  { day: "Dom", pct: 91 },
+  { day: "Lun", correcta: 79, regular: 15, mala: 6 },
+  { day: "Mar", correcta: 83, regular: 12, mala: 5 },
+  { day: "Mie", correcta: 80, regular: 14, mala: 6 },
+  { day: "Jue", correcta: 88, regular: 9, mala: 3 },
+  { day: "Vie", correcta: 85, regular: 10, mala: 5 },
+  { day: "Sab", correcta: 84, regular: 11, mala: 5 },
+  { day: "Dom", correcta: 91, regular: 7, mala: 2 },
 ];
 
-const monthData = Array.from({ length: 30 }, (_, i) => ({
-  day: `${i + 1}`,
-  pct: 70 + Math.round(Math.sin(i / 3) * 10 + Math.random() * 8),
-}));
+const monthData = Array.from({ length: 30 }, (_, i) => {
+  const base = 70 + Math.round(Math.sin(i / 3) * 10 + Math.random() * 8);
+  const m = Math.max(0, 100 - base - (100 - base) * 0.7);
+  return {
+    day: `${i + 1}`,
+    correcta: base,
+    regular: 100 - base - m,
+    mala: m,
+  };
+});
 
-const quarterData = Array.from({ length: 12 }, (_, i) => ({
-  day: `S${i + 1}`,
-  pct: 68 + Math.round(i * 1.5 + Math.random() * 6),
-}));
+const quarterData = Array.from({ length: 12 }, (_, i) => {
+  const base = 68 + Math.round(i * 1.5 + Math.random() * 6);
+  const m = Math.max(0, 100 - base - (100 - base) * 0.7);
+  return {
+    day: `S${i + 1}`,
+    correcta: base,
+    regular: 100 - base - m,
+    mala: m,
+  };
+});
 
-const fatigueData = [
-  { day: "L", buena: 5, regular: 2, mala: 1 },
-  { day: "M", buena: 6, regular: 1, mala: 0.5 },
-  { day: "X", buena: 4, regular: 2, mala: 2 },
-  { day: "J", buena: 7, regular: 1, mala: 0 },
-  { day: "V", buena: 5, regular: 3, mala: 1 },
-  { day: "S", buena: 3, regular: 1, mala: 0 },
-  { day: "D", buena: 2, regular: 0.5, mala: 0 },
+const todayPostureData = [
+  { name: "Correcta", value: 84, color: "#22c55e" },
+  { name: "Regular", value: 11, color: "#f59e0b" },
+  { name: "Mala", value: 5, color: "#ef4444" },
 ];
 
 const dailyLog = [
@@ -157,7 +165,7 @@ const dailyLog = [
 
 /* ─── Main ─── */
 const NOTIFICATIONS = [
-  { id: 1, icon: "&#9888;", title: "Alerta postural", body: "Desviacion cervical de 22° durante 45 segundos", time: "hace 12 min", border: "border-red-400", bg: "bg-red-50", titleColor: "text-red-600" },
+  { id: 1, icon: "&#9888;", title: "Alerta postural", body: "Tu cuello estuvo inclinado 22° durante 45 segundos", time: "hace 12 min", border: "border-red-400", bg: "bg-red-50", titleColor: "text-red-600" },
   { id: 2, icon: "&#128336;", title: "Pausa activa", body: "Llevas 2 h continuas. Es momento de descansar.", time: "hace 45 min", border: "border-yellow-400", bg: "bg-yellow-50", titleColor: "text-yellow-700" },
   { id: 3, icon: "&#9729;", title: "Sincronizacion completada", body: "Historial de hoy sincronizado correctamente con tu cuenta.", time: "hace 2 min", border: "border-blue-400", bg: "bg-blue-50", titleColor: "text-blue-600" },
   { id: 4, icon: "&#128202;", title: "Reporte semanal enviado", body: "Tu postura mejoro un 8% esta semana. Revisa tu correo.", time: "hoy 8:00 AM", border: "border-blue-400", bg: "bg-blue-50", titleColor: "text-blue-600" },
@@ -356,59 +364,67 @@ export function HistorialPage() {
 
             <div className="h-48 mt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                  <defs>
-                    <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0033CC" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#0033CC" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <BarChart data={chartData} margin={{ top: 20, right: 4, bottom: 0, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                   <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                   <Tooltip
-                    formatter={(v: number) => [`${v}%`, "Postura correcta"]}
+                    formatter={(value: any, name: string | number | undefined) => {
+                      const label = typeof name === "string" ? name : "Postura";
+                      return [`${value}%`, label.charAt(0).toUpperCase() + label.slice(1)];
+                    }}
                     contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
+                    cursor={{ fill: "#f3f4f6" }}
                   />
-                  <Area
-                    type="monotone" dataKey="pct"
-                    stroke="#0033CC" strokeWidth={2.5}
-                    fill="url(#blueGrad)"
-                    dot={{ r: 4, fill: "#0033CC", strokeWidth: 0 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </AreaChart>
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="correcta" name="Correcta" stackId="a" fill="#22c55e" radius={[0, 0, 4, 4]} />
+                  <Bar dataKey="regular" name="Regular" stackId="a" fill="#f59e0b" />
+                  <Bar dataKey="mala" name="Mala" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           {/* Fatigue map + Daily log side by side */}
           <div className="flex gap-5 mb-5">
-            {/* Fatigue heatmap */}
+            {/* Resumen de hoy (Pie Chart) */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 flex-1">
-              <div className="font-semibold text-gray-900 text-sm mb-4">Mapa de fatiga — semana</div>
-              <div className="h-36">
+              <div className="font-semibold text-gray-900 text-sm mb-4">Resumen de Hoy</div>
+              <div className="h-36 relative">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={fatigueData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }} />
-                    <Area type="monotone" dataKey="buena" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.8} />
-                    <Area type="monotone" dataKey="regular" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.8} />
-                    <Area type="monotone" dataKey="mala" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.8} />
-                  </AreaChart>
+                  <PieChart>
+                    <Pie
+                      data={todayPostureData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={65}
+                      paddingAngle={2}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {todayPostureData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any) => [`${value}%`]}
+                      contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
+                    />
+                  </PieChart>
                 </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-gray-900">84%</div>
+                    <div className="text-[10px] text-gray-500 font-medium leading-none">Correcto</div>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-4 mt-3">
-                {[
-                  { color: "bg-green-500", label: "Buena" },
-                  { color: "bg-amber-400", label: "Regular" },
-                  { color: "bg-red-500", label: "Mala" },
-                ].map(({ color, label }) => (
-                  <div key={label} className="flex items-center gap-1.5">
-                    <div className={`w-2.5 h-2.5 rounded-sm ${color}`} />
-                    <span className="text-xs text-gray-600">{label}</span>
+              <div className="flex items-center justify-center gap-4 mt-3">
+                {todayPostureData.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                    <span className="text-xs text-gray-600">{entry.name} ({entry.value}%)</span>
                   </div>
                 ))}
               </div>

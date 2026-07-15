@@ -1,42 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Cloud, Check, X, Brain, Pencil, Save } from "lucide-react";
-
-/* ─── Skeleton SVG (same as monitor) ─── */
-function SkeletonFigure() {
-  return (
-    <svg viewBox="0 0 200 260" className="w-full h-full" fill="none">
-      <circle cx="100" cy="38" r="18" stroke="#a78bfa" strokeWidth="2.5" />
-      <line x1="100" y1="56" x2="100" y2="72" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="100" y1="72" x2="55" y2="95" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="100" y1="72" x2="145" y2="95" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="100" y1="72" x2="100" y2="148" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="55" y1="95" x2="38" y2="135" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="38" y1="135" x2="28" y2="168" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="145" y1="95" x2="162" y2="135" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="162" y1="135" x2="172" y2="168" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="100" y1="148" x2="75" y2="162" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="100" y1="148" x2="125" y2="162" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="75" y1="162" x2="68" y2="210" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="68" y1="210" x2="62" y2="248" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="125" y1="162" x2="132" y2="210" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="132" y1="210" x2="138" y2="248" stroke="#c4b5fd" strokeWidth="2.5" strokeLinecap="round" />
-      {[
-        [100,38],[100,72],[55,95],[145,95],[38,135],[162,135],
-        [28,168],[172,168],[100,148],[75,162],[125,162],[68,210],[132,210],[62,248],[138,248],
-      ].map(([cx,cy],i) => (
-        <circle key={i} cx={cx} cy={cy} r="4" fill="#a78bfa" stroke="#0a1628" strokeWidth="1.5" />
-      ))}
-    </svg>
-  );
-}
+import { usePoseDetector } from "../../hooks/usePoseDetector";
 
 const TOTAL = 600; // 10 minutes in seconds (demo uses 60 for speed)
 
 const GESTURES = [
-  { label: "Beber agua (inclinacion 35°)", type: "natural", appearsAt: 0.25 },
+  { label: "Beber agua (inclinación 35°)", type: "natural", appearsAt: 0.25 },
   { label: "Mirar lateral (giro 45°)",     type: "natural", appearsAt: 0.55 },
-  { label: "Cabeza caida (>60° sostenido)", type: "bad",    appearsAt: 0.80 },
+  { label: "Cabeza caída (>60° sostenido)", type: "bad",    appearsAt: 0.80 },
 ];
 
 export function LearningModePage() {
@@ -48,6 +20,9 @@ export function LearningModePage() {
     Object.fromEntries(GESTURES.map((g) => [g.label, g.type]))
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { analyze, isReady } = usePoseDetector(videoRef, canvasRef);
 
   // Use 60 s demo duration so the gestures appear quickly in the UI
   const DEMO = 60;
@@ -66,10 +41,33 @@ export function LearningModePage() {
     return () => clearInterval(intervalRef.current!);
   }, []);
 
+  // Auto-analyze video frames
+  useEffect(() => {
+    let animationFrameId: number;
+    const renderLoop = () => {
+      if (videoRef.current && videoRef.current.readyState >= 2 && !done) {
+        analyze(performance.now());
+      }
+      animationFrameId = requestAnimationFrame(renderLoop);
+    };
+    renderLoop();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [analyze, done]);
+
+  // Handle camera stream
+  useEffect(() => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }).catch(err => console.error("Camera error", err));
+    }
+  }, []);
+
   const progress = elapsed / DEMO;
 
   // Countdown shown as 10:00 → 00:00 mapped onto DEMO seconds
-  const remaining = DEMO - elapsed;
   const displayMin = String(Math.floor((TOTAL * (1 - progress)) / 60)).padStart(2, "0");
   const displaySec = String(Math.floor(TOTAL * (1 - progress)) % 60).padStart(2, "0");
 
@@ -106,7 +104,7 @@ export function LearningModePage() {
         </button>
         <div className="flex items-center gap-2">
           <Brain className="w-4 h-4 text-white" />
-          <span className="text-white font-semibold text-sm">Filtro de Micromovimientos — Modo Aprendizaje</span>
+          <span className="text-white font-semibold text-sm">Movimientos permitidos — Modo Entrenamiento</span>
           <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full ml-1">Avanzado</span>
         </div>
       </div>
@@ -122,7 +120,7 @@ export function LearningModePage() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-                  <span className="text-sm font-semibold text-purple-800">Modo Aprendizaje activo</span>
+                  <span className="text-sm font-semibold text-purple-800">Modo Entrenamiento activo</span>
                 </div>
                 <span className="text-lg font-bold text-purple-700 font-mono">{displayMin}:{displaySec}</span>
               </div>
@@ -143,7 +141,7 @@ export function LearningModePage() {
                 <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
                   <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
                 </div>
-                <span className="text-sm font-semibold text-green-800">Aprendizaje completado — {visibleGestures.length} gestos capturados</span>
+                <span className="text-sm font-semibold text-green-800">Entrenamiento completado — {visibleGestures.length} gestos capturados</span>
               </div>
               <button
                 onClick={handleFinish}
@@ -175,8 +173,9 @@ export function LearningModePage() {
               <div className="absolute bottom-3 left-3 w-6 h-6 border-l-2 border-b-2 border-purple-400 rounded-bl" />
               <div className="absolute bottom-3 right-3 w-6 h-6 border-r-2 border-b-2 border-purple-400 rounded-br" />
 
-              <div className="absolute inset-0 flex items-center justify-center p-10">
-                <SkeletonFigure />
+              <div className="absolute inset-0 flex items-center justify-center transition-opacity">
+                <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover -scale-x-100" />
+                <canvas ref={canvasRef} width={640} height={480} className="absolute inset-0 w-full h-full -scale-x-100" />
               </div>
 
               {/* Gesture detected flash */}
@@ -286,7 +285,7 @@ export function LearningModePage() {
         <div className="flex items-center gap-4 text-gray-400 text-[11px]">
           <span>&#x25CF; DERECHITO v1.0</span>
           <span>&#x25CF; CPU: 14% - RAM: 812 MB</span>
-          <span>&#x25CF; MediaPipe Pose v0.10 - 30 fps</span>
+          <span>&#x25CF; Sistema de detección v0.10 - {isReady ? 'Activo' : 'Cargando'}</span>
         </div>
         <div className="flex items-center gap-1.5 text-green-500 text-[11px] font-medium">
           <Cloud className="w-3 h-3" /> Sync activo

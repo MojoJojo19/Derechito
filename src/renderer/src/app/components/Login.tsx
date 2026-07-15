@@ -8,9 +8,30 @@ export function Login() {
   const [email, setEmail] = useState("demo@derechito.app");
   const [password, setPassword] = useState("********");
   const [rememberMe, setRememberMe] = useState(true);
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const validate = () => {
+    const errs: { email?: string; password?: string } = {};
+    if (!email.trim()) {
+      errs.email = "El correo es obligatorio.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errs.email = "Ingresa un correo válido.";
+    }
+    if (!password) {
+      errs.password = "La contraseña es obligatoria.";
+    } else if (password.length < 6) {
+      errs.password = "La contraseña debe tener al menos 6 caracteres.";
+    }
+    return errs;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitted(true);
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
     navigate("/monitor");
   };
 
@@ -38,6 +59,9 @@ export function Login() {
               placeholder="demo@derechito.app"
             />
           </div>
+          {submitted && errors.email && (
+            <p className="text-xs text-red-500 mt-1">{errors.email}</p>
+          )}
         </div>
 
         {/* Password */}
@@ -65,6 +89,9 @@ export function Login() {
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
+          {submitted && errors.password && (
+            <p className="text-xs text-red-500 mt-1">{errors.password}</p>
+          )}
         </div>
 
         {/* Remember me & Forgot password */}
@@ -86,7 +113,8 @@ export function Login() {
         {/* Submit button */}
         <button
           type="submit"
-          className="w-full bg-[#0033CC] text-white py-3.5 rounded-lg font-medium hover:bg-[#0029A3] transition-colors flex items-center justify-center gap-2"
+          disabled={!email.trim() && !password}
+          className={`w-full py-3.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${!email.trim() && !password ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-[#0033CC] text-white hover:bg-[#0029A3]'}`}
         >
           <LogIn className="w-5 h-5" />
           Iniciar sesión

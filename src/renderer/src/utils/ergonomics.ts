@@ -11,6 +11,7 @@ export interface PostureMetrics {
   cervicalAngle: number;
   shoulderTilt: number;
   headProjection: number; // approximate cm
+  trunkLean: number; // Inclinación del tronco: < 0 joroba, > 0 inclinado atrás
   score: number;
 }
 
@@ -67,11 +68,36 @@ export function calculateHeadProjection(cervicalAngle: number): number {
 }
 
 /**
+ * Calculates trunk lean (joroba / inclinación hacia atrás)
+ * Uses shoulders (11, 12) and hips (23, 24).
+ * Returns angle in degrees: negative = leaning forward (joroba), positive = leaning back.
+ */
+export function calculateTrunkLean(landmarks: NormalizedLandmark[]): number {
+  if (landmarks.length < 25) return 0;
+  
+  const shoulderY = (landmarks[11].y + landmarks[12].y) / 2;
+  const shoulderZ = (landmarks[11].z + landmarks[12].z) / 2;
+  
+  const hipY = (landmarks[23].y + landmarks[24].y) / 2;
+  const hipZ = (landmarks[23].z + landmarks[24].z) / 2;
+  
+  const dz = shoulderZ - hipZ; // negative if shoulders are closer to camera
+  const dy = hipY - shoulderY; // positive distance vertically
+  
+  if (dy === 0) return 0;
+  
+  const radians = Math.atan2(dz, dy);
+  const degrees = (radians * 180) / Math.PI;
+  
+  return parseFloat(degrees.toFixed(1));
+}
+
+/**
  * Calculates an overall posture score (0-100) based on deviation from a baseline.
  */
 export function calculatePostureScore(current: PostureMetrics, baseline: PostureMetrics | null): number {
   // If no baseline is captured, we evaluate against an "absolute ideal" (0 degrees deviation).
-  const ref = baseline || { cervicalAngle: 0, shoulderTilt: 0, headProjection: 0, score: 100 };
+  const ref = baseline || { cervicalAngle: 0, shoulderTilt: 0, headProjection: 0, trunkLean: 0, score: 100 };
 
   let score = 100;
 

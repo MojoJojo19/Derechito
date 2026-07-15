@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowLeft, Camera, Cloud, Check, AlertTriangle,
-  Monitor, ChevronLeft, ChevronRight, Zap, X,
+  Monitor, ChevronLeft, Zap, X,
 } from "lucide-react";
 import { usePoseDetector } from "../../hooks/usePoseDetector";
 import { useAppStore } from "../../store/useAppStore";
@@ -442,6 +442,7 @@ export function CalibrationWizard() {
         cervicalAngle: calculateCervicalAngle(landmarks),
         shoulderTilt: calculateShoulderTilt(landmarks),
         headProjection: calculateHeadProjection(calculateCervicalAngle(landmarks)),
+        trunkLean: 0,
         score: 100 // baseline is 100 by definition
       });
     }

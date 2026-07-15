@@ -7,55 +7,10 @@ import {
 } from "lucide-react";
 import { useSystemMetrics } from "../../hooks/useSystemMetrics";
 import { usePoseDetector } from "../../hooks/usePoseDetector";
-import { useSync } from "../../hooks/useSync";
 import { usePostureAlert } from "../../hooks/usePostureAlert";
 import { useAppStore } from "../../store/useAppStore";
-import { calculateCervicalAngle, calculateShoulderTilt, calculateHeadProjection, calculatePostureScore, PostureMetrics } from "../../utils/ergonomics";
+import { calculateCervicalAngle, calculateShoulderTilt, calculateHeadProjection, calculatePostureScore, calculateTrunkLean, PostureMetrics } from "../../utils/ergonomics";
 
-/* ─── Skeleton SVG ─── */
-function SkeletonFigure({ color = "#00E5BE", torsoOnly = false }: { color?: string; torsoOnly?: boolean }) {
-  const dim = color === "#ff6b6b" ? "#ff6b6b" : "#4B9EFF";
-  // torsoOnly: viewBox cropped to head + shoulders + spine + hip line only
-  const viewBox = torsoOnly ? "30 20 140 150" : "0 0 200 260";
-  return (
-    <svg viewBox={viewBox} className="w-full h-full" fill="none">
-      {/* Head */}
-      <circle cx="100" cy="38" r="18" stroke={color} strokeWidth="2.5" />
-      {/* Neck */}
-      <line x1="100" y1="56" x2="100" y2="72" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      {/* Shoulders */}
-      <line x1="100" y1="72" x2="55" y2="95" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="100" y1="72" x2="145" y2="95" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      {/* Spine */}
-      <line x1="100" y1="72" x2="100" y2="148" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      {/* Upper arms */}
-      <line x1="55" y1="95" x2="38" y2="135" stroke={dim} strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="145" y1="95" x2="162" y2="135" stroke={dim} strokeWidth="2.5" strokeLinecap="round" />
-      {/* Lower arms — hidden in torsoOnly */}
-      {!torsoOnly && <>
-        <line x1="38" y1="135" x2="28" y2="168" stroke={dim} strokeWidth="2.5" strokeLinecap="round" />
-        <line x1="162" y1="135" x2="172" y2="168" stroke={dim} strokeWidth="2.5" strokeLinecap="round" />
-      </>}
-      {/* Hip line */}
-      <line x1="100" y1="148" x2="75" y2="162" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      <line x1="100" y1="148" x2="125" y2="162" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
-      {/* Legs — hidden in torsoOnly */}
-      {!torsoOnly && <>
-        <line x1="75" y1="162" x2="68" y2="210" stroke={dim} strokeWidth="2.5" strokeLinecap="round" />
-        <line x1="68" y1="210" x2="62" y2="248" stroke={dim} strokeWidth="2.5" strokeLinecap="round" />
-        <line x1="125" y1="162" x2="132" y2="210" stroke={dim} strokeWidth="2.5" strokeLinecap="round" />
-        <line x1="132" y1="210" x2="138" y2="248" stroke={dim} strokeWidth="2.5" strokeLinecap="round" />
-      </>}
-      {/* Key-point dots */}
-      {(torsoOnly
-        ? [[100,38],[100,72],[55,95],[145,95],[38,135],[162,135],[100,148],[75,162],[125,162]]
-        : [[100,38],[100,72],[55,95],[145,95],[38,135],[162,135],[28,168],[172,168],[100,148],[75,162],[125,162],[68,210],[132,210],[62,248],[138,248]]
-      ).map(([cx,cy],i) => (
-        <circle key={i} cx={cx} cy={cy} r="4" fill={color} stroke="#0a1628" strokeWidth="1.5" />
-      ))}
-    </svg>
-  );
-}
 
 /* ─── Circular score gauge ─── */
 function ScoreGauge({ score, label }: { score: number; label: string }) {
@@ -188,7 +143,6 @@ export function MonitorDashboard() {
   const bellRef = useRef<HTMLDivElement>(null);
   
   const { cpu, ram } = useSystemMetrics();
-  const { syncStatus } = useSync("temp-user");
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -207,11 +161,13 @@ export function MonitorDashboard() {
         cervicalAngle: calculateCervicalAngle(landmarks),
         shoulderTilt: calculateShoulderTilt(landmarks),
         headProjection: calculateHeadProjection(calculateCervicalAngle(landmarks)),
+        trunkLean: calculateTrunkLean(landmarks),
         score: calculatePostureScore(
           {
             cervicalAngle: calculateCervicalAngle(landmarks),
             shoulderTilt: calculateShoulderTilt(landmarks),
             headProjection: 0,
+            trunkLean: calculateTrunkLean(landmarks),
             score: 0
           }, 
           baselineProfile
@@ -277,10 +233,11 @@ export function MonitorDashboard() {
   const scoreLabel = postureOk ? "Excelente" : "Mejorable";
 
   const metrics = [
-    { label: "Angulo cervical",     value: simulateBad ? "+18.3°" : `+${currentMetrics?.cervicalAngle || 0}°` },
-    { label: "Inclinacion hombros", value: simulateBad ? "8.5°"   : `${currentMetrics?.shoulderTilt || 0}°`  },
-    { label: "Proyeccion cabeza",   value: simulateBad ? "7.2 cm" : `${currentMetrics?.headProjection || 0} cm`},
-    { label: "Distancia camara",    value: "72 cm" }, // Placeholder for depth since 2D camera doesn't provide accurate depth easily
+    { label: "Posición del cuello",     value: simulateBad ? "+18.3°" : `+${currentMetrics?.cervicalAngle || 0}°` },
+    { label: "Nivel de los hombros",    value: simulateBad ? "8.5°"   : `${currentMetrics?.shoulderTilt || 0}°`  },
+    { label: "Posición de la cabeza",   value: simulateBad ? "7.2 cm" : `${currentMetrics?.headProjection || 0} cm`},
+    { label: "Inclinación del tronco",  value: simulateBad ? "Joroba" : (currentMetrics?.trunkLean && currentMetrics.trunkLean < -5 ? "Joroba" : (currentMetrics?.trunkLean && currentMetrics.trunkLean > 5 ? "Hacia atrás" : "Recto")) },
+    { label: "Distancia a la pantalla", value: "72 cm" }, // Placeholder for depth since 2D camera doesn't provide accurate depth easily
   ];
 
   return (

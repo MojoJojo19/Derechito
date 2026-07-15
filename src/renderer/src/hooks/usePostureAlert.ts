@@ -23,7 +23,7 @@ export function usePostureAlert(
       return;
     }
 
-    const ref = baselineProfile || { cervicalAngle: 0, shoulderTilt: 0, headProjection: 0, score: 100 };
+    const ref = baselineProfile || { cervicalAngle: 0, shoulderTilt: 0, headProjection: 0, trunkLean: 0, score: 100 };
 
     const now = Date.now();
     const dt = now - lastUpdate.current; // elapsed time in ms
@@ -31,7 +31,12 @@ export function usePostureAlert(
 
     // Check deviation
     const cervicalDev = Math.abs(currentMetrics.cervicalAngle - ref.cervicalAngle);
-    const isBadPosture = cervicalDev > ANGLE_THRESHOLD;
+    const trunkLeanDev = currentMetrics.trunkLean || 0; // Negative means joroba, positive means back
+    
+    const isBadCervical = cervicalDev > ANGLE_THRESHOLD;
+    const isBadTrunkLean = Math.abs(trunkLeanDev) > 10;
+    
+    const isBadPosture = isBadCervical || isBadTrunkLean;
 
     // Add time to session stats
     addSessionTime(!isBadPosture, dt);
@@ -41,17 +46,36 @@ export function usePostureAlert(
       
       // If we crossed the threshold
       if (badPostureSeconds.current >= TIME_THRESHOLD_SEC) {
+        
+        let alertTitle = '¡Postura incorrecta detectada!';
+        let alertDesc = `Tu cuello ha estado inclinado ${Math.round(cervicalDev)}° por más de ${TIME_THRESHOLD_SEC}s. ¡Siéntate derecho!`;
+        let alertBody = `Te estás encorvando demasiado (+${Math.round(cervicalDev)}°). Endereza tu espalda.`;
+        
+        if (isBadTrunkLean && !isBadCervical) {
+          if (trunkLeanDev < 0) {
+            alertTitle = '¡Estás encorvado!';
+            alertDesc = 'Tu tronco está inclinado hacia adelante. ¡Endereza tu espalda!';
+            alertBody = 'Estás formando joroba. ¡Siéntate derecho!';
+          } else {
+            alertTitle = '¡Estás muy recostado!';
+            alertDesc = 'Tu tronco está inclinado hacia atrás. Mantén una postura recta.';
+            alertBody = 'Estás inclinado hacia atrás. Ajusta tu silla y siéntate bien.';
+          }
+        }
+
         // Trigger alert!
-        toast.error('¡Postura incorrecta detectada!', {
-          description: `Desviación cervical de ${Math.round(cervicalDev)}° por más de ${TIME_THRESHOLD_SEC}s. ¡Siéntate derecho!`,
+        toast.error(alertTitle, {
+          description: alertDesc,
           duration: 5000,
         });
         
         // Use Electron IPC to show a native Windows notification if available
-        if (window.electron?.ipcRenderer) {
+        if (window.api?.showNotification) {
+          window.api.showNotification(alertTitle, alertBody);
+        } else if (window.electron?.ipcRenderer) {
           window.electron.ipcRenderer.send('show-notification', {
-            title: 'Alerta de Postura DERECHITO',
-            body: `Te estás encorvando demasiado (+${Math.round(cervicalDev)}°). Endereza tu espalda.`,
+            title: alertTitle,
+            body: alertBody,
           });
         }
         

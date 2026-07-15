@@ -24,9 +24,12 @@ export function registerSystemIPC() {
   })
 
   // Mostrar notificacion nativa de Windows/Mac
-  ipcMain.on('show-notification', (_, { title, body }) => {
+  const notify = ({ title, body }: { title: string; body: string }) => {
     if (Notification.isSupported()) {
-      new Notification({ title, body }).show()
+      new Notification({ title, body, silent: false }).show()
     }
-  })
+  }
+
+  ipcMain.on('show-notification', (_, args) => notify(args))
+  ipcMain.handle('show-notification', (_, args) => notify(args))
 }

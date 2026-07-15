@@ -165,8 +165,7 @@ export function ConfiguracionPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
-  
-  const { baselineProfile, sessionStats } = useAppStore();
+  const { baselineProfile } = useAppStore();
   const { cpu, ram } = useSystemMetrics();
 
   const handleExportCSV = () => {
@@ -329,23 +328,23 @@ export function ConfiguracionPage() {
                 </div>
               </Card>
 
-              {/* Perfil ergonómico activo */}
-              <Card title="Perfil ergonomico activo" icon={<User className="w-4 h-4" />}>
+              {/* Tu postura de referencia */}
+              <Card title="Tu postura de referencia" icon={<User className="w-4 h-4" />}>
                 <div className="bg-blue-50 rounded-lg p-3 mb-4 text-xs text-blue-800 space-y-1.5">
                   <div className="flex justify-between">
                     <span className="text-gray-500">Estado</span>
-                    <span className="font-semibold">{baselineProfile ? "Calibrado" : "Usando perfil por defecto"}</span>
+                    <span className="font-semibold">{baselineProfile ? "Configurado" : "Usando perfil por defecto"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Angulo cervical base</span>
+                    <span className="text-gray-500">Posición del cuello base</span>
                     <span className="font-semibold text-[#0033CC]">{baselineProfile ? `+${baselineProfile.cervicalAngle}°` : "0°"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Inclinacion de hombros</span>
+                    <span className="text-gray-500">Nivel de los hombros</span>
                     <span className="font-semibold">{baselineProfile ? `${baselineProfile.shoulderTilt}°` : "0°"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Proyeccion cabeza base</span>
+                    <span className="text-gray-500">Posición de la cabeza base</span>
                     <span className="font-semibold">{baselineProfile ? `${baselineProfile.headProjection} cm` : "0 cm"}</span>
                   </div>
                 </div>
@@ -353,7 +352,7 @@ export function ConfiguracionPage() {
                   onClick={() => navigate("/calibration")}
                   className="w-full flex items-center justify-center gap-2 bg-[#0033CC] hover:bg-[#0029A3] transition-colors text-white text-xs font-semibold py-2.5 rounded-lg"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" /> Recalibrar perfil
+                  <RefreshCw className="w-3.5 h-3.5" /> Volver a configurar postura
                 </button>
               </Card>
 
@@ -447,8 +446,8 @@ export function ConfiguracionPage() {
             {/* ── Right column ── */}
             <div className="flex flex-col gap-5">
 
-              {/* Filtro de micromovimientos */}
-              <Card title="Filtro de Micromovimientos" icon={<Sliders className="w-4 h-4" />}>
+              {/* Movimientos permitidos */}
+              <Card title="Movimientos permitidos" icon={<Sliders className="w-4 h-4" />}>
                 <p className="text-[11px] text-gray-600 leading-relaxed mb-4">
                   Entrena el sistema para reconocer los movimientos cotidianos y no
                   generar falsas alertas. Reduce los falsos positivos del monitor.
@@ -459,7 +458,7 @@ export function ConfiguracionPage() {
                   className="w-full flex items-center justify-center gap-2 text-xs font-semibold py-2.5 rounded-lg mb-4 transition-colors bg-[#0033CC] hover:bg-[#0029A3] text-white"
                 >
                   <Monitor className="w-3.5 h-3.5" />
-                  Activar Modo Aprendizaje - 10 minutos
+                  Activar Modo Entrenamiento - 10 minutos
                 </button>
 
                 {learned ? (
