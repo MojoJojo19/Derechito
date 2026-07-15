@@ -1,5 +1,6 @@
 import { ipcMain, Notification } from 'electron'
 import os from 'node:os'
+import { exec } from 'node:child_process'
 
 export function registerSystemIPC() {
   // RAM real
@@ -32,4 +33,43 @@ export function registerSystemIPC() {
 
   ipcMain.on('show-notification', (_, args) => notify(args))
   ipcMain.handle('show-notification', (_, args) => notify(args))
+
+  // Lock screen (Win+L equivalent)
+  ipcMain.handle('lock-screen', () => {
+    if (process.platform === 'win32') {
+      exec('rundll32.exe user32.dll,LockWorkStation', (err) => {
+        if (err) console.error('Failed to lock screen:', err)
+      })
+    } else if (process.platform === 'darwin') {
+      exec('pmset displaysleepnow', (err) => {
+        if (err) console.error('Failed to lock screen:', err)
+      })
+    } else {
+      // Linux
+      exec('xdg-screensaver lock', (err) => {
+        if (err) {
+          exec('loginctl lock-session', (err2) => {
+            if (err2) console.error('Failed to lock screen:', err2)
+          })
+        }
+      })
+    }
+  })
+
+  // Suspend PC
+  ipcMain.handle('suspend-pc', () => {
+    if (process.platform === 'win32') {
+      exec('powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"', (err) => {
+        if (err) console.error('Failed to suspend PC:', err)
+      })
+    } else if (process.platform === 'darwin') {
+      exec('pmset sleepnow', (err) => {
+        if (err) console.error('Failed to suspend:', err)
+      })
+    } else {
+      exec('systemctl suspend', (err) => {
+        if (err) console.error('Failed to suspend:', err)
+      })
+    }
+  })
 }

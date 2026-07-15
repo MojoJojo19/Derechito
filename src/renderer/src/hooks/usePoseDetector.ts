@@ -1,6 +1,36 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PoseLandmarker, FilesetResolver, NormalizedLandmark } from '@mediapipe/tasks-vision'
 
+const SMOOTHING_WINDOW = 5; // Average over last 5 frames
+
+function averageLandmarks(buffer: NormalizedLandmark[][]): NormalizedLandmark[] {
+  if (buffer.length === 0) return [];
+  const numLandmarks = buffer[0].length;
+  const result: NormalizedLandmark[] = [];
+
+  for (let i = 0; i < numLandmarks; i++) {
+    let sumX = 0, sumY = 0, sumZ = 0;
+    let count = 0;
+    for (const frame of buffer) {
+      if (i < frame.length) {
+        sumX += frame[i].x;
+        sumY += frame[i].y;
+        sumZ += frame[i].z;
+        count++;
+      }
+    }
+    if (count > 0) {
+      result.push({
+        x: sumX / count,
+        y: sumY / count,
+        z: sumZ / count,
+        visibility: (buffer[buffer.length - 1][i] as any).visibility,
+      } as NormalizedLandmark);
+    }
+  }
+  return result;
+}
+
 export function usePoseDetector(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   canvasRef: React.RefObject<HTMLCanvasElement | null>
@@ -10,6 +40,7 @@ export function usePoseDetector(
   
   const lastVideoTime = useRef(-1);
   const lastStateUpdate = useRef(0);
+  const landmarkBuffer = useRef<NormalizedLandmark[][]>([]);
 
   useEffect(() => {
     let active = true
@@ -52,19 +83,27 @@ export function usePoseDetector(
       if (ctx) {
         ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
         if (result.landmarks && result.landmarks.length > 0) {
-          const lms = result.landmarks[0]
+          const rawLms = result.landmarks[0]
           
-          // Draw points directly to canvas for 60fps smoothness (bypass React)
+          // Add to smoothing buffer
+          landmarkBuffer.current.push(rawLms);
+          if (landmarkBuffer.current.length > SMOOTHING_WINDOW) {
+            landmarkBuffer.current.shift();
+          }
+
+          // Draw raw points directly to canvas for visual smoothness (bypass React)
           ctx.fillStyle = '#00E5BE'
-          for (const lm of lms) {
+          for (const lm of rawLms) {
             ctx.beginPath()
             ctx.arc(lm.x * canvasRef.current.width, lm.y * canvasRef.current.height, 4, 0, 2 * Math.PI)
             ctx.fill()
           }
 
           // Throttle React state updates to 2 times per second for ergonomic math
+          // Use SMOOTHED landmarks for stable metric calculation
           if (timestamp - lastStateUpdate.current > 500) {
-            setThrottledLandmarks(lms)
+            const smoothed = averageLandmarks(landmarkBuffer.current);
+            setThrottledLandmarks(smoothed)
             lastStateUpdate.current = timestamp
           }
         }

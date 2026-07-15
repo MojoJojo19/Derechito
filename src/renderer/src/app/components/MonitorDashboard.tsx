@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import {
   Cloud, Monitor, Clock, Cpu, History, Settings,
   PauseCircle, PlayCircle, RotateCcw, LogOut, Check,
-  User, AlertTriangle, Bell, X,
+  User, AlertTriangle, Bell, X, Eye, EyeOff,
 } from "lucide-react";
 import { useSystemMetrics } from "../../hooks/useSystemMetrics";
 import { usePoseDetector } from "../../hooks/usePoseDetector";
 import { usePostureAlert } from "../../hooks/usePostureAlert";
+import { useEyeDetector } from "../../hooks/useEyeDetector";
 import { useAppStore } from "../../store/useAppStore";
 import { calculateCervicalAngle, calculateShoulderTilt, calculateHeadProjection, calculatePostureScore, calculateTrunkLean, PostureMetrics } from "../../utils/ergonomics";
 
@@ -34,55 +35,35 @@ function ScoreGauge({ score, label }: { score: number; label: string }) {
   );
 }
 
-/* ─── Notifications panel ─── */
-const NOTIFICATIONS = [
-  {
-    id: 1,
-    type: "alert",
-    icon: "&#9888;",
-    title: "Alerta postural",
-    body: "Desviacion cervical de 22° durante 45 segundos",
-    time: "hace 12 min",
-    border: "border-red-400",
-    bg: "bg-red-50",
-    titleColor: "text-red-600",
-  },
-  {
-    id: 2,
-    type: "pause",
-    icon: "&#128336;",
-    title: "Pausa activa",
-    body: "Llevas 2 h continuas. Es momento de descansar.",
-    time: "hace 45 min",
-    border: "border-yellow-400",
-    bg: "bg-yellow-50",
-    titleColor: "text-yellow-700",
-  },
-  {
-    id: 3,
-    type: "sync",
-    icon: "&#9729;",
-    title: "Sincronizacion completada",
-    body: "Historial de hoy sincronizado correctamente con tu cuenta.",
-    time: "hace 2 min",
-    border: "border-blue-400",
-    bg: "bg-blue-50",
-    titleColor: "text-blue-600",
-  },
-  {
-    id: 4,
-    type: "report",
-    icon: "&#128202;",
-    title: "Reporte semanal enviado",
-    body: "Tu postura mejoro un 8% esta semana. Revisa tu correo.",
-    time: "hoy 8:00 AM",
-    border: "border-blue-400",
-    bg: "bg-blue-50",
-    titleColor: "text-blue-600",
-  },
-];
-
+/* ─── Notifications panel (REAL) ─── */
 function NotificationsPanel({ onClose }: { onClose: () => void }) {
+  const { notifications, markAllRead } = useAppStore();
+
+  useEffect(() => {
+    // Mark all as read when panel opens
+    markAllRead();
+  }, [markAllRead]);
+
+  const getNotifStyle = (type: string) => {
+    switch (type) {
+      case 'alert': return { border: "border-red-400", bg: "bg-red-50", titleColor: "text-red-600", icon: "⚠️" };
+      case 'pause': return { border: "border-yellow-400", bg: "bg-yellow-50", titleColor: "text-yellow-700", icon: "🕐" };
+      case 'sync': return { border: "border-blue-400", bg: "bg-blue-50", titleColor: "text-blue-600", icon: "☁️" };
+      case 'info': return { border: "border-blue-400", bg: "bg-blue-50", titleColor: "text-blue-600", icon: "ℹ️" };
+      default: return { border: "border-gray-400", bg: "bg-gray-50", titleColor: "text-gray-600", icon: "📋" };
+    }
+  };
+
+  const formatTime = (timestamp: number) => {
+    const diff = Date.now() - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return "ahora";
+    if (minutes < 60) return `hace ${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `hace ${hours}h`;
+    return `hace ${Math.floor(hours / 24)}d`;
+  };
+
   return (
     <div className="absolute top-12 right-0 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -92,16 +73,27 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
-        {NOTIFICATIONS.map((n) => (
-          <div key={n.id} className={`flex gap-3 px-4 py-3 border-l-4 ${n.border} ${n.bg}`}>
-            <span className="text-base flex-shrink-0 mt-0.5" dangerouslySetInnerHTML={{ __html: n.icon }} />
-            <div className="min-w-0">
-              <div className={`text-xs font-bold mb-0.5 ${n.titleColor}`}>{n.title}</div>
-              <div className="text-xs text-gray-700 leading-snug">{n.body}</div>
-              <div className="text-[10px] text-gray-400 mt-1">{n.time}</div>
-            </div>
+        {notifications.length === 0 ? (
+          <div className="px-4 py-8 text-center">
+            <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <div className="text-sm text-gray-400 font-medium">Sin notificaciones</div>
+            <div className="text-xs text-gray-300 mt-1">Las alertas aparecerán aquí</div>
           </div>
-        ))}
+        ) : (
+          notifications.map((n) => {
+            const style = getNotifStyle(n.type);
+            return (
+              <div key={n.id} className={`flex gap-3 px-4 py-3 border-l-4 ${style.border} ${style.bg}`}>
+                <span className="text-base flex-shrink-0 mt-0.5">{style.icon}</span>
+                <div className="min-w-0">
+                  <div className={`text-xs font-bold mb-0.5 ${style.titleColor}`}>{n.title}</div>
+                  <div className="text-xs text-gray-700 leading-snug">{n.body}</div>
+                  <div className="text-[10px] text-gray-400 mt-1">{formatTime(n.timestamp)}</div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -135,9 +127,8 @@ function LogoutModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel:
 /* ─── Main component ─── */
 export function MonitorDashboard() {
   const navigate = useNavigate();
-  const [elapsed, setElapsed] = useState(10297);
+  const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(true);
-  const [simulateBad, setSimulateBad] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
@@ -148,11 +139,19 @@ export function MonitorDashboard() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { landmarks, analyze, isReady } = usePoseDetector(videoRef, canvasRef);
   
-  const { baselineProfile, sessionStats } = useAppStore();
+  const { baselineProfile, sessionStats, notifications, setSessionStartTime } = useAppStore();
   const [currentMetrics, setCurrentMetrics] = useState<PostureMetrics | null>(null);
+
+  // Eye detection
+  const { eyesOpen, closedSeconds, isReady: eyeReady, warningActive } = useEyeDetector(videoRef, running);
 
   // Hook for triggering alerts
   usePostureAlert(currentMetrics, running);
+
+  // Set session start time
+  useEffect(() => {
+    setSessionStartTime(Date.now());
+  }, [setSessionStartTime]);
 
   // Compute metrics in real-time
   useEffect(() => {
@@ -175,6 +174,26 @@ export function MonitorDashboard() {
       });
     }
   }, [landmarks, baselineProfile, running]);
+
+  // Auto-save posture data to DB every 30 seconds
+  useEffect(() => {
+    if (!running || !currentMetrics) return;
+
+    const saveInterval = setInterval(() => {
+      if (currentMetrics) {
+        window.api?.savePosturePoint({
+          sessionId: null,
+          userId: 'local', // Use actual user ID when auth is implemented
+          score: currentMetrics.score,
+          cervicalAngle: currentMetrics.cervicalAngle,
+          shoulderTilt: currentMetrics.shoulderTilt,
+          isGoodPosture: currentMetrics.score >= 80,
+        });
+      }
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(saveInterval);
+  }, [running, currentMetrics]);
 
   // Auto-analyze video frames
   useEffect(() => {
@@ -227,17 +246,19 @@ export function MonitorDashboard() {
     return `${h}:${m}:${sec}`;
   };
 
-  const realScore = currentMetrics?.score || 100;
-  const score = simulateBad ? 42 : realScore;
+  const score = currentMetrics?.score || 100;
   const postureOk = score >= 80;
   const scoreLabel = postureOk ? "Excelente" : "Mejorable";
 
+  // Count unread notifications
+  const unreadCount = notifications.filter(n => !n.read).length;
+
   const metrics = [
-    { label: "Posición del cuello",     value: simulateBad ? "+18.3°" : `+${currentMetrics?.cervicalAngle || 0}°` },
-    { label: "Nivel de los hombros",    value: simulateBad ? "8.5°"   : `${currentMetrics?.shoulderTilt || 0}°`  },
-    { label: "Posición de la cabeza",   value: simulateBad ? "7.2 cm" : `${currentMetrics?.headProjection || 0} cm`},
-    { label: "Inclinación del tronco",  value: simulateBad ? "Joroba" : (currentMetrics?.trunkLean && currentMetrics.trunkLean < -5 ? "Joroba" : (currentMetrics?.trunkLean && currentMetrics.trunkLean > 5 ? "Hacia atrás" : "Recto")) },
-    { label: "Distancia a la pantalla", value: "72 cm" }, // Placeholder for depth since 2D camera doesn't provide accurate depth easily
+    { label: "Posición del cuello",     value: `+${currentMetrics?.cervicalAngle || 0}°` },
+    { label: "Nivel de los hombros",    value: `${currentMetrics?.shoulderTilt || 0}°`  },
+    { label: "Posición de la cabeza",   value: `${currentMetrics?.headProjection || 0} cm`},
+    { label: "Inclinación del tronco",  value: (currentMetrics?.trunkLean && currentMetrics.trunkLean < -5 ? "Joroba" : (currentMetrics?.trunkLean && currentMetrics.trunkLean > 5 ? "Hacia atrás" : "Recto")) },
+    { label: "Estado de ojos",          value: eyeReady ? (eyesOpen ? "Abiertos" : `Cerrados (${Math.round(closedSeconds)}s)`) : "Cargando..." },
   ];
 
   return (
@@ -261,6 +282,18 @@ export function MonitorDashboard() {
           <div className="flex items-center gap-1.5 text-gray-700 text-xs font-medium bg-gray-100 px-3 py-1.5 rounded-full">
             <Cpu className="w-3 h-3 text-gray-500" /> CPU: {cpu}%
           </div>
+          {/* Eye status indicator */}
+          {eyeReady && (
+            <div className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${
+              warningActive ? "bg-red-50 border border-red-200 text-red-600 animate-pulse" :
+              eyesOpen ? "bg-green-50 border border-green-200 text-green-600" : 
+              "bg-yellow-50 border border-yellow-200 text-yellow-600"
+            }`}>
+              {eyesOpen ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+              {warningActive ? `¡Bloqueando en ${Math.max(0, 15 - Math.round(closedSeconds))}s!` :
+               eyesOpen ? "Ojos OK" : `Cerrados ${Math.round(closedSeconds)}s`}
+            </div>
+          )}
           {/* Bell */}
           <div className="relative" ref={bellRef}>
             <button
@@ -269,9 +302,11 @@ export function MonitorDashboard() {
             >
               <Bell className="w-4 h-4" />
             </button>
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white text-[9px] font-bold pointer-events-none">
-              3
-            </div>
+            {unreadCount > 0 && (
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white text-[9px] font-bold pointer-events-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </div>
+            )}
             {showNotifications && (
               <NotificationsPanel onClose={() => setShowNotifications(false)} />
             )}
@@ -295,7 +330,7 @@ export function MonitorDashboard() {
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-green-600 font-medium mb-1">
               <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-              Sincronizado hace 2 min
+              Sincronizado
             </div>
             <div className="text-[11px] text-gray-500">
               Sesion activa: <span className={`font-mono font-semibold ${running ? "text-gray-700" : "text-amber-500"}`}>{fmt(elapsed)}</span>
@@ -368,23 +403,27 @@ export function MonitorDashboard() {
 
             {/* Posture banner */}
             <div className={`rounded-xl px-5 py-4 flex items-center justify-between transition-colors ${
-              !running ? "bg-gray-400" : postureOk ? "bg-green-500" : "bg-red-500"
+              !running ? "bg-gray-400" : warningActive ? "bg-red-600 animate-pulse" : postureOk ? "bg-green-500" : "bg-red-500"
             }`}>
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
                   {!running
                     ? <PauseCircle className="w-4 h-4 text-white" />
+                    : warningActive
+                    ? <EyeOff className="w-4 h-4 text-white" />
                     : postureOk
                     ? <Check className="w-4 h-4 text-white" strokeWidth={3} />
                     : <AlertTriangle className="w-4 h-4 text-white" />}
                 </div>
                 <div>
                   <div className="text-white font-bold text-sm">
-                    {!running ? "Monitor en pausa" : postureOk ? "Postura Correcta" : "Postura Incorrecta"}
+                    {!running ? "Monitor en pausa" : warningActive ? "¡Ojos cerrados detectados!" : postureOk ? "Postura Correcta" : "Postura Incorrecta"}
                   </div>
                   <div className="text-white/80 text-xs">
                     {!running
                       ? "Haz clic en Reanudar monitor para continuar"
+                      : warningActive
+                      ? "Abre los ojos o la pantalla se bloqueará"
                       : postureOk
                       ? "Tu columna vertebral esta correctamente alineada"
                       : "Corrige tu postura: encorvamiento detectado"}
@@ -394,15 +433,6 @@ export function MonitorDashboard() {
               <div className="flex items-center gap-4">
                 <span className="text-white font-bold text-3xl">{running ? score : "--"}</span>
                 <span className="text-white/70 text-xs">puntos</span>
-                {running && (
-                  <button
-                    onClick={() => setSimulateBad((v) => !v)}
-                    className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 transition-colors text-white text-xs font-medium px-3 py-2 rounded-lg"
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    Demo: {simulateBad ? "restaurar postura" : "simular mala postura"}
-                  </button>
-                )}
               </div>
             </div>
 
@@ -456,7 +486,11 @@ export function MonitorDashboard() {
                     {metrics.map(({ label, value }) => (
                       <div key={label} className="flex items-center justify-between">
                         <span className="text-xs text-gray-600">{label}</span>
-                        <span className={`text-xs font-bold ${!running ? "text-gray-300" : simulateBad ? "text-red-500" : "text-[#0033CC]"}`}>
+                        <span className={`text-xs font-bold ${
+                          !running ? "text-gray-300" : 
+                          label === "Estado de ojos" ? (eyesOpen ? "text-green-600" : warningActive ? "text-red-500 animate-pulse" : "text-yellow-600") :
+                          "text-[#0033CC]"
+                        }`}>
                           {running ? value : "--"}
                         </span>
                       </div>
@@ -499,6 +533,7 @@ export function MonitorDashboard() {
           <span>&#x25CF; DERECHITO v1.0</span>
           <span>&#x25CF; CPU: {cpu}% - RAM: {ram.usedMB} MB</span>
           <span>&#x25CF; MediaPipe Pose {isReady ? 'Ready' : 'Loading'} - 30 fps</span>
+          <span>&#x25CF; Face {eyeReady ? 'Ready' : 'Loading'}</span>
         </div>
         <div className="flex items-center gap-1.5 text-green-500 text-[11px] font-medium">
           <Cloud className="w-3 h-3" /> Sync activo

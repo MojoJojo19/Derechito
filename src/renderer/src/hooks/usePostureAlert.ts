@@ -7,15 +7,20 @@ export function usePostureAlert(
   currentMetrics: PostureMetrics | null,
   isRunning: boolean
 ) {
-  const { baselineProfile, incrementAlerts, addSessionTime } = useAppStore();
+  const { baselineProfile, incrementAlerts, addSessionTime, addNotification } = useAppStore();
   
   // Track consecutive seconds of bad posture
   const badPostureSeconds = useRef(0);
   const lastUpdate = useRef(Date.now());
   
+  // Track continuous usage for "pausa activa"
+  const continuousMinutes = useRef(0);
+  const lastPauseAlert = useRef(0); // timestamp of last pause alert
+  
   // 15 degrees deviation for 10 consecutive seconds = ALERT
   const ANGLE_THRESHOLD = 15;
   const TIME_THRESHOLD_SEC = 10;
+  const PAUSE_THRESHOLD_MIN = 120; // 2 hours
 
   useEffect(() => {
     if (!isRunning || !currentMetrics) {
@@ -28,6 +33,34 @@ export function usePostureAlert(
     const now = Date.now();
     const dt = now - lastUpdate.current; // elapsed time in ms
     lastUpdate.current = now;
+
+    // Track continuous usage (in minutes)
+    continuousMinutes.current += dt / 60000;
+
+    // Check if we should fire a "pausa activa" notification (every 2 hours)
+    if (continuousMinutes.current >= PAUSE_THRESHOLD_MIN && 
+        now - lastPauseAlert.current > 30 * 60 * 1000) { // Don't spam more than every 30min
+      lastPauseAlert.current = now;
+      
+      const hours = Math.floor(continuousMinutes.current / 60);
+      toast.warning('¡Pausa activa recomendada!', {
+        description: `Llevas ${hours}h continuas. Es momento de descansar y estirarte.`,
+        duration: 8000,
+      });
+      
+      addNotification({
+        type: 'pause',
+        title: 'Pausa activa',
+        body: `Llevas ${hours}h continuas frente a la pantalla. Es momento de descansar.`,
+      });
+
+      if (window.api?.showNotification) {
+        window.api.showNotification(
+          '¡Pausa activa recomendada!',
+          `Llevas ${hours}h continuas. Toma un descanso de 5-10 minutos.`
+        );
+      }
+    }
 
     // Check deviation
     const cervicalDev = Math.abs(currentMetrics.cervicalAngle - ref.cervicalAngle);
@@ -69,6 +102,13 @@ export function usePostureAlert(
           duration: 5000,
         });
         
+        // Add real notification to store
+        addNotification({
+          type: 'alert',
+          title: alertTitle,
+          body: alertBody,
+        });
+        
         // Use Electron IPC to show a native Windows notification if available
         if (window.api?.showNotification) {
           window.api.showNotification(alertTitle, alertBody);
@@ -89,5 +129,5 @@ export function usePostureAlert(
       // Slowly decay bad posture counter to allow for minor slips, or just reset
       badPostureSeconds.current = Math.max(0, badPostureSeconds.current - (dt / 500));
     }
-  }, [currentMetrics, baselineProfile, isRunning, incrementAlerts, addSessionTime]);
+  }, [currentMetrics, baselineProfile, isRunning, incrementAlerts, addSessionTime, addNotification]);
 }

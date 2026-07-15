@@ -2,13 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Cloud, Check, X, Brain, Pencil, Save } from "lucide-react";
 import { usePoseDetector } from "../../hooks/usePoseDetector";
+import { useSystemMetrics } from "../../hooks/useSystemMetrics";
 
-const TOTAL = 600; // 10 minutes in seconds (demo uses 60 for speed)
+// Real training duration in seconds (10 minutes)
+const TRAINING_DURATION = 600;
 
 const GESTURES = [
-  { label: "Beber agua (inclinación 35°)", type: "natural", appearsAt: 0.25 },
-  { label: "Mirar lateral (giro 45°)",     type: "natural", appearsAt: 0.55 },
-  { label: "Cabeza caída (>60° sostenido)", type: "bad",    appearsAt: 0.80 },
+  { label: "Beber agua (inclinación 35°)", type: "natural", appearsAtPct: 0.25 },
+  { label: "Mirar lateral (giro 45°)",     type: "natural", appearsAtPct: 0.55 },
+  { label: "Cabeza caída (>60° sostenido)", type: "bad",    appearsAtPct: 0.80 },
 ];
 
 export function LearningModePage() {
@@ -23,17 +25,16 @@ export function LearningModePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { analyze, isReady } = usePoseDetector(videoRef, canvasRef);
+  const { cpu, ram } = useSystemMetrics();
 
-  // Use 60 s demo duration so the gestures appear quickly in the UI
-  const DEMO = 60;
-
+  // Real timer — counts up every second until TRAINING_DURATION
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       setElapsed((e) => {
-        if (e + 1 >= DEMO) {
+        if (e + 1 >= TRAINING_DURATION) {
           clearInterval(intervalRef.current!);
           setDone(true);
-          return DEMO;
+          return TRAINING_DURATION;
         }
         return e + 1;
       });
@@ -65,13 +66,15 @@ export function LearningModePage() {
     }
   }, []);
 
-  const progress = elapsed / DEMO;
+  const progress = elapsed / TRAINING_DURATION;
 
-  // Countdown shown as 10:00 → 00:00 mapped onto DEMO seconds
-  const displayMin = String(Math.floor((TOTAL * (1 - progress)) / 60)).padStart(2, "0");
-  const displaySec = String(Math.floor(TOTAL * (1 - progress)) % 60).padStart(2, "0");
+  // Real countdown: remaining = TRAINING_DURATION - elapsed
+  const remaining = Math.max(0, TRAINING_DURATION - elapsed);
+  const displayMin = String(Math.floor(remaining / 60)).padStart(2, "0");
+  const displaySec = String(remaining % 60).padStart(2, "0");
 
-  const visibleGestures = GESTURES.filter((g) => progress >= g.appearsAt);
+  // Show gestures based on real progress percentage
+  const visibleGestures = GESTURES.filter((g) => progress >= g.appearsAtPct);
 
   const handleFinish = () => {
     // Pass learned=true so ConfiguracionPage can show the stabilised dict
@@ -131,9 +134,14 @@ export function LearningModePage() {
                   style={{ width: `${progress * 100}%` }}
                 />
               </div>
-              <p className="text-xs text-purple-600">
-                Realiza movimientos cotidianos: beber agua, girar la cabeza, alcanzar el teclado...
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-purple-600">
+                  Realiza movimientos cotidianos: beber agua, girar la cabeza, alcanzar el teclado...
+                </p>
+                <span className="text-[10px] text-purple-400 font-mono">
+                  {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} / {Math.floor(TRAINING_DURATION / 60)}:{String(TRAINING_DURATION % 60).padStart(2, "0")}
+                </span>
+              </div>
             </div>
           ) : (
             <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-center justify-between">
@@ -158,7 +166,7 @@ export function LearningModePage() {
               <span className="text-sm font-semibold text-gray-800">Vista en tiempo real</span>
               <span className="flex items-center gap-1 text-purple-600 text-xs font-semibold">
                 <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" />
-                Analizando gestos
+                {done ? "Análisis completo" : "Analizando gestos"}
               </span>
             </div>
             <div className="relative bg-[#0e1520] rounded-xl overflow-hidden" style={{ aspectRatio: "4/3" }}>
@@ -216,7 +224,7 @@ export function LearningModePage() {
 
             <div className="space-y-2">
               {GESTURES.map((g) => {
-                const visible = progress >= g.appearsAt;
+                const visible = progress >= g.appearsAtPct;
                 const currentType = gestureTypes[g.label] ?? g.type;
                 return (
                   <div
@@ -284,7 +292,7 @@ export function LearningModePage() {
       <div className="bg-white border-t border-gray-200 flex items-center justify-between px-6 py-2 flex-shrink-0">
         <div className="flex items-center gap-4 text-gray-400 text-[11px]">
           <span>&#x25CF; DERECHITO v1.0</span>
-          <span>&#x25CF; CPU: 14% - RAM: 812 MB</span>
+          <span>&#x25CF; CPU: {cpu}% - RAM: {ram.usedMB} MB</span>
           <span>&#x25CF; Sistema de detección v0.10 - {isReady ? 'Activo' : 'Cargando'}</span>
         </div>
         <div className="flex items-center gap-1.5 text-green-500 text-[11px] font-medium">

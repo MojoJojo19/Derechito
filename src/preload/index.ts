@@ -10,9 +10,16 @@ const api = {
     ipcRenderer.invoke('show-notification', { title, body }),
   savePosturePoint: (data: any) => ipcRenderer.invoke('save-posture-point', data),
   getHistory: (userId: string, days: number) => ipcRenderer.invoke('get-history', { userId, days }),
+  getDailyLog: (userId: string, days: number) => ipcRenderer.invoke('get-daily-log', { userId, days }),
+  getTodayAlerts: (userId: string) => ipcRenderer.invoke('get-today-alerts', userId),
+  saveAlert: (data: any) => ipcRenderer.invoke('save-alert', data),
+  getTodaySummary: (userId: string) => ipcRenderer.invoke('get-today-summary', userId),
+  getWeeklyStats: (userId: string) => ipcRenderer.invoke('get-weekly-stats', userId),
   saveConfig: (key: string, value: any) => ipcRenderer.invoke('save-config', { key, value }),
   getConfig: (key: string) => ipcRenderer.invoke('get-config', key),
   syncToCloud: (userId: string) => ipcRenderer.invoke('sync-to-cloud', userId),
+  lockScreen: () => ipcRenderer.invoke('lock-screen'),
+  suspendPC: () => ipcRenderer.invoke('suspend-pc'),
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
