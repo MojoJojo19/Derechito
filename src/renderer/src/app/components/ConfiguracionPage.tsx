@@ -4,10 +4,11 @@ import {
   Cloud, Clock, Cpu, Monitor, History, Settings,
   RotateCcw, LogOut, User, PlayCircle, Bell,
   Check, X, Shield, Sliders, RefreshCw, Download,
-  Trash2, ChevronRight,
+  Trash2, ChevronRight, ChevronDown, Zap, Target, Edit2,
 } from "lucide-react";
 import { useAppStore } from "../../store/useAppStore";
 import { useSystemMetrics } from "../../hooks/useSystemMetrics";
+import { toast } from "sonner";
 
 const NOTIFICATIONS = [
   { id: 1, icon: "&#9888;", title: "Alerta postural", body: "Desviacion cervical de 22° durante 45 segundos", time: "hace 12 min", border: "border-red-400", bg: "bg-red-50", titleColor: "text-red-600" },
@@ -37,6 +38,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 
 /* ─── Sidebar (shared pattern) ─── */
 function Sidebar({ elapsed, onNavigate, onLogout }: { elapsed: number; onNavigate: (p: string) => void; onLogout: () => void }) {
+  const { userProfile } = useAppStore();
   const fmt = (s: number) => {
     const h = String(Math.floor(s / 3600)).padStart(2, "0");
     const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
@@ -104,10 +106,12 @@ function Sidebar({ elapsed, onNavigate, onLogout }: { elapsed: number; onNavigat
 
       <div className="p-3 border-t border-gray-100">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#0033CC] rounded-full flex items-center justify-center text-white text-xs font-bold">D</div>
+          <div className="w-8 h-8 bg-[#0033CC] rounded-full flex items-center justify-center text-white text-xs font-bold">
+            {userProfile.name.charAt(0).toUpperCase() || 'D'}
+          </div>
           <div>
-            <div className="text-xs font-semibold text-gray-800">Demo</div>
-            <div className="text-[10px] text-gray-500">demo@derechito.app</div>
+            <div className="text-xs font-semibold text-gray-800">{userProfile.name}</div>
+            <div className="text-[10px] text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap max-w-[120px]">{userProfile.email}</div>
           </div>
         </div>
       </div>
@@ -128,23 +132,16 @@ function Card({ title, icon, children }: { title: string; icon: React.ReactNode;
   );
 }
 
-/* ─── Slider row ─── */
-function SliderRow({ label, value, tag }: { label: string; value: number; tag: string; tagColor?: string }) {
-  const [val, setVal] = useState(value);
+/* ─── Input field ─── */
+function FieldRow({ label, value, type = "text", onChange }: { label: string; value: string; type?: string; onChange: (v: string) => void }) {
   return (
-    <div className="mb-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs text-gray-700">{label}</span>
-        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-          tag === "Normal" ? "bg-green-100 text-green-700" :
-          tag === "Mas estricto" ? "bg-blue-100 text-blue-700" :
-          "bg-gray-100 text-gray-600"
-        }`}>{tag}</span>
-      </div>
+    <div className="flex flex-col gap-1 mb-3">
+      <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</label>
       <input
-        type="range" min={0} max={100} value={val}
-        onChange={(e) => setVal(Number(e.target.value))}
-        className="w-full h-1.5 accent-[#0033CC] cursor-pointer"
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-800 bg-white focus:outline-none focus:ring-1 focus:ring-[#0033CC] focus:border-[#0033CC]"
       />
     </div>
   );
@@ -155,7 +152,7 @@ export function ConfiguracionPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const learned = searchParams.get("learned") === "true";
-  const [elapsed, setElapsed] = useState(10900);
+  const [elapsed, setElapsed] = useState(0);
   const [syncHistory, setSyncHistory] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(true);
   const [visualAlerts, setVisualAlerts] = useState(true);
@@ -164,19 +161,30 @@ export function ConfiguracionPage() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
+  const [precisionOpen, setPrecisionOpen] = useState(true);
   const bellRef = useRef<HTMLDivElement>(null);
-  const { baselineProfile } = useAppStore();
-  const { cpu, ram } = useSystemMetrics();
+
+  const { baselineProfile, sessionStartTime, userProfile, setUserProfile, alertMode, setAlertMode } = useAppStore();
+  const { cpu } = useSystemMetrics();
+
+  // Local state for profile edits
+  const [editName, setEditName] = useState(userProfile.name);
+  const [editEmail, setEditEmail] = useState(userProfile.email);
+
+  const handleSaveProfile = () => {
+    if (!editName.trim() || !editEmail.trim()) {
+      toast.error("El nombre y correo no pueden estar vacíos");
+      return;
+    }
+    setUserProfile({ name: editName.trim(), email: editEmail.trim() });
+    toast.success("Perfil actualizado correctamente");
+  };
 
   const handleExportCSV = () => {
     const rows = [
-      ["Fecha", "Postura correcta %", "Alertas", "Sesion (min)", "Angulo cervical", "Dist. hombro-oido"],
-      ["2026-06-23", "94", "1", "135", "+5.2°", "14.8 cm"],
-      ["2026-06-22", "91", "1", "260", "+4.9°", "15.1 cm"],
-      ["2026-06-21", "88", "3", "420", "+6.1°", "14.2 cm"],
-      ["2026-06-20", "93", "2", "490", "+4.7°", "15.0 cm"],
-      ["2026-06-19", "80", "4", "405", "+7.3°", "13.9 cm"],
-      ["2026-06-18", "95", "1", "450", "+4.5°", "15.3 cm"],
+      ["Fecha", "Postura correcta %", "Alertas", "Sesion (min)", "Posicion del cuello", "Alineacion de cabeza"],
+      ["2026-06-23", "94", "1", "135", "Ideal", "Correcta"],
+      ["2026-06-22", "91", "1", "260", "Ideal", "Correcta"],
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -190,7 +198,6 @@ export function ConfiguracionPage() {
 
   const handleDeleteAll = () => {
     setShowDeleteConfirm(false);
-    // In production: wipe user data via API
     alert("Todos los datos han sido eliminados. Cerrando sesion...");
     navigate("/");
   };
@@ -206,9 +213,15 @@ export function ConfiguracionPage() {
   }, [showNotifications]);
 
   useEffect(() => {
-    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    const updateElapsed = () => {
+      if (sessionStartTime) {
+        setElapsed(Math.floor((Date.now() - sessionStartTime) / 1000));
+      }
+    };
+    updateElapsed();
+    const t = setInterval(updateElapsed, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [sessionStartTime]);
 
   const fmt = (s: number) => {
     const h = String(Math.floor(s / 3600)).padStart(2, "0");
@@ -276,30 +289,29 @@ export function ConfiguracionPage() {
         <Sidebar elapsed={elapsed} onNavigate={navigate} onLogout={() => setShowLogout(true)} />
 
         <main className="flex-1 overflow-auto p-6">
-          <h1 className="text-lg font-bold text-gray-900 mb-5">Configuracion</h1>
+          <h1 className="text-lg font-bold text-gray-900 mb-5">Ajustes</h1>
 
           <div className="grid grid-cols-2 gap-5">
 
             {/* ── Left column ── */}
             <div className="flex flex-col gap-5">
 
-              {/* Cuenta y sincronización */}
-              <Card title="Cuenta y sincronizacion" icon={<Cloud className="w-4 h-4" />}>
-                {/* User row */}
+              {/* Tu cuenta */}
+              <Card title="Tu cuenta" icon={<Cloud className="w-4 h-4" />}>
                 <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 bg-[#0033CC] rounded-full flex items-center justify-center text-white text-sm font-bold">D</div>
+                    <div className="w-9 h-9 bg-[#0033CC] rounded-full flex items-center justify-center text-white text-sm font-bold">
+                      {userProfile.name.charAt(0).toUpperCase() || 'D'}
+                    </div>
                     <div>
-                      <div className="text-xs font-semibold text-gray-900">Demo</div>
-                      <div className="text-[10px] text-gray-500">demo@derechito.app</div>
+                      <div className="text-xs font-semibold text-gray-900">{userProfile.name}</div>
+                      <div className="text-[10px] text-gray-500 overflow-hidden text-ellipsis whitespace-nowrap max-w-[150px]">{userProfile.email}</div>
                     </div>
                   </div>
                   <span className="flex items-center gap-1 text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 px-2 py-1 rounded-full">
                     <div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Conectado
                   </span>
                 </div>
-
-                {/* Toggles */}
                 <div className="space-y-3 mb-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-700">Sincronizar historial</span>
@@ -310,8 +322,6 @@ export function ConfiguracionPage() {
                     <Toggle value={weeklyReports} onChange={setWeeklyReports} />
                   </div>
                 </div>
-
-                {/* Sync frequency */}
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs text-gray-700">Frecuencia de sincronizacion</span>
                   <select className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-[#0033CC]">
@@ -320,44 +330,225 @@ export function ConfiguracionPage() {
                     <option>Cada hora</option>
                   </select>
                 </div>
-
-                {/* Last sync */}
                 <div className="bg-gray-50 rounded-lg px-3 py-2 flex items-center justify-between">
                   <span className="text-[10px] text-gray-500">Ultima sincronizacion: hace 14:32</span>
                   <span className="text-[10px] font-semibold text-[#0033CC]">4748 transferidos</span>
                 </div>
               </Card>
 
-              {/* Tu postura de referencia */}
-              <Card title="Tu postura de referencia" icon={<User className="w-4 h-4" />}>
-                <div className="bg-blue-50 rounded-lg p-3 mb-4 text-xs text-blue-800 space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Estado</span>
-                    <span className="font-semibold">{baselineProfile ? "Configurado" : "Usando perfil por defecto"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Posición del cuello base</span>
-                    <span className="font-semibold text-[#0033CC]">{baselineProfile ? `+${baselineProfile.cervicalAngle}°` : "0°"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Nivel de los hombros</span>
-                    <span className="font-semibold">{baselineProfile ? `${baselineProfile.shoulderTilt}°` : "0°"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Posición de la cabeza base</span>
-                    <span className="font-semibold">{baselineProfile ? `${baselineProfile.headProjection} cm` : "0 cm"}</span>
-                  </div>
+              {/* Datos personales */}
+              <Card title="Tus datos personales" icon={<Edit2 className="w-4 h-4" />}>
+                <FieldRow label="Nombre completo" value={editName} onChange={setEditName} />
+                <FieldRow label="Correo electronico" value={editEmail} type="email" onChange={setEditEmail} />
+                <div className="grid grid-cols-2 gap-3">
+                  <FieldRow label="Contrasena" value="" type="password" onChange={() => {}} />
+                  <FieldRow label="Confirmar contrasena" value="" type="password" onChange={() => {}} />
                 </div>
-                <button
-                  onClick={() => navigate("/calibration")}
-                  className="w-full flex items-center justify-center gap-2 bg-[#0033CC] hover:bg-[#0029A3] transition-colors text-white text-xs font-semibold py-2.5 rounded-lg"
+                <button 
+                  onClick={handleSaveProfile}
+                  className="w-full mt-1 flex items-center justify-center gap-2 bg-[#0033CC] hover:bg-[#0029A3] transition-colors text-white text-xs font-semibold py-2.5 rounded-lg"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" /> Volver a configurar postura
+                  Guardar cambios
                 </button>
               </Card>
 
+              {/* Características físicas */}
+              <Card title="Caracteristicas fisicas" icon={<User className="w-4 h-4" />}>
+                <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+                  Esta informacion ayuda a calibrar mejor el sistema para tu cuerpo y detectar posturas con mayor precision.
+                </p>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <FieldRow label="Altura (cm)" value="170" type="number" onChange={() => {}} />
+                  <FieldRow label="Peso (kg)" value="70" type="number" onChange={() => {}} />
+                  <FieldRow label="Edad" value="28" type="number" onChange={() => {}} />
+                </div>
+                <div className="mb-3">
+                  <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">Actividad fisica habitual</label>
+                  <select className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-800 bg-white focus:outline-none focus:ring-1 focus:ring-[#0033CC]">
+                    <option>Sedentario (trabajo de escritorio)</option>
+                    <option>Ligera (caminatas ocasionales)</option>
+                    <option>Moderada (ejercicio 3 veces por semana)</option>
+                    <option>Activo (ejercicio diario)</option>
+                  </select>
+                </div>
+                <button className="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 transition-colors text-gray-700 text-xs font-semibold py-2.5 rounded-lg">
+                  Actualizar perfil fisico
+                </button>
+              </Card>
+
+              {/* Modo de monitoreo */}
+              <div className="bg-white rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 bg-blue-50 rounded-lg flex items-center justify-center text-[#0033CC]">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <span className="font-semibold text-gray-900 text-sm">Modo de monitoreo</span>
+                </div>
+                <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
+                  Elige con que nivel de exigencia quieres que el sistema controle tu postura.
+                </p>
+                <div className="flex gap-3">
+                  {/* Modo Estándar */}
+                  <button
+                    onClick={() => { setAlertMode("standard"); toast.success("Modo Estándar activado"); }}
+                    className={`flex-1 rounded-xl p-4 border-2 text-left transition-all ${
+                      alertMode === "standard"
+                        ? "border-[#0033CC] bg-blue-50"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        alertMode === "standard" ? "border-[#0033CC] bg-[#0033CC]" : "border-gray-300"
+                      }`}>
+                        {alertMode === "standard" && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                      </div>
+                      <span className={`text-xs font-bold ${alertMode === "standard" ? "text-[#0033CC]" : "text-gray-700"}`}>
+                        Modo Estandar
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                      Monitoreo relajado. Recibiras alertas solo cuando la postura sea notablemente mala durante 15s.
+                    </p>
+                  </button>
+
+                  {/* Modo Riguroso */}
+                  <button
+                    onClick={() => { setAlertMode("rigorous"); toast.success("Modo Riguroso activado"); }}
+                    className={`flex-1 rounded-xl p-4 border-2 text-left transition-all ${
+                      alertMode === "rigorous"
+                        ? "border-[#7c3aed] bg-purple-50"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        alertMode === "rigorous" ? "border-[#7c3aed] bg-[#7c3aed]" : "border-gray-300"
+                      }`}>
+                        {alertMode === "rigorous" && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                      </div>
+                      <span className={`text-xs font-bold ${alertMode === "rigorous" ? "text-[#7c3aed]" : "text-gray-700"}`}>
+                        Modo Riguroso
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 leading-relaxed">
+                      Deteccion estricta. El sistema avisa ante cualquier encorvamiento en solo 5s.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            {/* ── Right column ── */}
+            <div className="flex flex-col gap-5">
+
+              {/* Optimizar Precisión — collapsible group */}
+              <div className="bg-white rounded-xl border-2 border-indigo-100 overflow-hidden">
+                <button
+                  onClick={() => setPrecisionOpen((v) => !v)}
+                  className="w-full flex items-center justify-between px-5 py-4 bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-[#0033CC] to-[#7c3aed] rounded-lg flex items-center justify-center">
+                      <Zap className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-sm font-bold text-gray-900">Optimizar Precision</div>
+                      <div className="text-[10px] text-gray-500">Calibra y entrena el sistema para tu cuerpo</div>
+                    </div>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${precisionOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {precisionOpen && (
+                  <div className="p-4 flex flex-col gap-4 bg-gray-50/50">
+
+                    {/* Tu configuración de postura */}
+                    <div className="bg-white rounded-xl border border-gray-200 p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 bg-blue-50 rounded-md flex items-center justify-center text-[#0033CC]">
+                          <User className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="font-semibold text-gray-900 text-xs">Tu configuracion de postura</span>
+                      </div>
+                      <div className="bg-blue-50 rounded-lg p-3 mb-3 text-xs text-blue-800 space-y-1.5">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Estado</span>
+                          <span className="font-semibold">{baselineProfile ? "Configurado" : "Predeterminado"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Alineacion de cabeza</span>
+                          <span className="font-semibold">{baselineProfile ? "Personalizada" : "Estandar"}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navigate("/calibration")}
+                        className="w-full flex items-center justify-center gap-2 bg-[#0033CC] hover:bg-[#0029A3] transition-colors text-white text-xs font-semibold py-2 rounded-lg"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Recalibrar perfil
+                      </button>
+                    </div>
+
+                    {/* Reconocimiento de movimientos */}
+                    <div className="bg-white rounded-xl border border-gray-200 p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 bg-purple-50 rounded-md flex items-center justify-center text-[#7c3aed]">
+                          <Sliders className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="font-semibold text-gray-900 text-xs">Reconocimiento de movimientos</span>
+                      </div>
+                      <p className="text-[11px] text-gray-600 leading-relaxed mb-1">
+                        Entrena el sistema para reconocer los movimientos cotidianos y no
+                        generar falsas alertas. Reduce los falsos positivos del monitor.
+                      </p>
+                      
+                      {learned && (
+                        <div className="mb-3 mt-3">
+                          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                            Movimientos aprendidos ({LEARNED_GESTURES.length})
+                          </div>
+                          <div className="space-y-1.5">
+                            {LEARNED_GESTURES.map((g) => (
+                              <div key={g.label} className={`flex items-center justify-between p-2 rounded-lg border ${
+                                g.type === "natural" ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
+                              }`}>
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                    g.type === "natural" ? "bg-green-500" : "bg-red-500"
+                                  }`}>
+                                    {g.type === "natural"
+                                      ? <Check className="w-2 h-2 text-white" strokeWidth={3} />
+                                      : <X className="w-2 h-2 text-white" strokeWidth={3} />}
+                                  </div>
+                                  <span className="text-[11px] text-gray-800">{g.label}</span>
+                                </div>
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                  g.type === "natural" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                                }`}>
+                                  {g.type === "natural" ? "Natural" : "Mala postura"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => navigate("/learning-mode")}
+                        className="w-full flex items-center justify-center gap-2 text-xs font-semibold py-2 mt-3 rounded-lg transition-colors bg-[#7c3aed] hover:bg-[#6d28d9] text-white"
+                      >
+                        <Monitor className="w-3 h-3" />
+                        {learned ? "Repetir Modo Aprendizaje" : "Activar Modo Aprendizaje"}
+                      </button>
+                    </div>
+
+                  </div>
+                )}
+              </div>
+              
               {/* Alertas y notificaciones */}
-              <Card title="Alertas y notificaciones" icon={<Bell className="w-4 h-4" />}>
+              <Card title="Avisos y recordatorios" icon={<Bell className="w-4 h-4" />}>
                 <div className="space-y-3">
                   {[
                     { label: "Alertas visuales", sub: "Banner en pantalla", emoji: "🔔", value: visualAlerts, set: setVisualAlerts },
@@ -378,8 +569,33 @@ export function ConfiguracionPage() {
                 </div>
               </Card>
 
+              {/* Privacidad garantizada */}
+              <Card title="Tus datos estan protegidos" icon={<Shield className="w-4 h-4" />}>
+                <div className="space-y-2.5">
+                  {[
+                    "Procesamiento 100% local",
+                    "Solo historial estadistico sincronizado",
+                    "Datos corporales anonimizados y eliminados",
+                    "Video no capturado ni almacenado",
+                  ].map((item) => (
+                    <div key={item} className="flex items-start gap-2">
+                      <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Check className="w-2.5 h-2.5 text-green-600" strokeWidth={3} />
+                      </div>
+                      <span className="text-xs text-gray-700">{item}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 bg-blue-50 border border-blue-100 rounded-lg p-3">
+                  <div className="text-[10px] text-blue-700 leading-relaxed">
+                    DERECHITO cumple con GDPR y CCPA. Puedes exportar o eliminar tus datos en cualquier momento desde tu perfil de cuenta.
+                  </div>
+                </div>
+              </Card>
+              
               {/* Gestión de datos */}
-              <Card title="Exportar y eliminar datos" icon={<Download className="w-4 h-4" />}>
+              <Card title="Mis datos" icon={<Download className="w-4 h-4" />}>
                 <div className="space-y-1">
                   <button
                     onClick={handleExportCSV}
@@ -442,102 +658,8 @@ export function ConfiguracionPage() {
                 </div>
               )}
             </div>
-
-            {/* ── Right column ── */}
-            <div className="flex flex-col gap-5">
-
-              {/* Movimientos permitidos */}
-              <Card title="Movimientos permitidos" icon={<Sliders className="w-4 h-4" />}>
-                <p className="text-[11px] text-gray-600 leading-relaxed mb-4">
-                  Entrena el sistema para reconocer los movimientos cotidianos y no
-                  generar falsas alertas. Reduce los falsos positivos del monitor.
-                </p>
-
-                <button
-                  onClick={() => navigate("/learning-mode")}
-                  className="w-full flex items-center justify-center gap-2 text-xs font-semibold py-2.5 rounded-lg mb-4 transition-colors bg-[#0033CC] hover:bg-[#0029A3] text-white"
-                >
-                  <Monitor className="w-3.5 h-3.5" />
-                  Activar Modo Entrenamiento - 10 minutos
-                </button>
-
-                {learned ? (
-                  <div>
-                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                      Diccionario actual ({LEARNED_GESTURES.length} gestos)
-                    </div>
-                    <div className="space-y-2">
-                      {LEARNED_GESTURES.map((g) => (
-                        <div key={g.label} className={`flex items-center justify-between p-2.5 rounded-lg border ${
-                          g.type === "natural" ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"
-                        }`}>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${
-                              g.type === "natural" ? "bg-green-500" : "bg-red-500"
-                            }`}>
-                              {g.type === "natural"
-                                ? <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
-                                : <X className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
-                            </div>
-                            <span className="text-xs text-gray-800">{g.label}</span>
-                          </div>
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            g.type === "natural" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
-                          }`}>
-                            {g.type === "natural" ? "Natural" : "Mala postura"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <SliderRow label="Beber agua (Umbral 40°)" value={50} tag="Normal" />
-                    <SliderRow label="Mover lateral (giro 40°)" value={50} tag="Normal" />
-                    <SliderRow label="Cabeza-codo (+150° undefined)" value={75} tag="Mas estricto" />
-                  </div>
-                )}
-              </Card>
-
-              {/* Privacidad garantizada */}
-              <Card title="Privacidad garantizada" icon={<Shield className="w-4 h-4" />}>
-                <div className="space-y-2.5">
-                  {[
-                    "Procesamiento 100% local",
-                    "Solo historial estadistico sincronizado",
-                    "Datos corporales anonimizados y eliminados",
-                    "Video no capturado ni almacenado",
-                  ].map((item) => (
-                    <div key={item} className="flex items-start gap-2">
-                      <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Check className="w-2.5 h-2.5 text-green-600" strokeWidth={3} />
-                      </div>
-                      <span className="text-xs text-gray-700">{item}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 bg-blue-50 border border-blue-100 rounded-lg p-3">
-                  <div className="text-[10px] text-blue-700 leading-relaxed">
-                    DERECHITO cumple con GDPR y CCPA. Puedes exportar o eliminar tus datos en cualquier momento desde tu perfil de cuenta.
-                  </div>
-                </div>
-              </Card>
-            </div>
           </div>
         </main>
-      </div>
-
-      {/* Bottom bar */}
-      <div className="bg-white border-t border-gray-200 flex items-center justify-between px-6 py-2 flex-shrink-0">
-        <div className="flex items-center gap-4 text-gray-400 text-[11px]">
-          <span>&#x25CF; DERECHITO v1.0</span>
-          <span>&#x25CF; CPU: {cpu}% - RAM: {ram.usedMB} MB</span>
-          <span>&#x25CF; MediaPipe Pose v0.10 - 30 fps</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-green-500 text-[11px] font-medium">
-          <Cloud className="w-3 h-3" /> Sync activo
-        </div>
       </div>
 
       {showLogout && (

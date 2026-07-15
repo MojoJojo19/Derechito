@@ -10,7 +10,7 @@ import { usePoseDetector } from "../../hooks/usePoseDetector";
 import { usePostureAlert } from "../../hooks/usePostureAlert";
 import { useEyeDetector } from "../../hooks/useEyeDetector";
 import { useAppStore } from "../../store/useAppStore";
-import { calculateCervicalAngle, calculateShoulderTilt, calculateHeadProjection, calculatePostureScore, calculateTrunkLean, PostureMetrics } from "../../utils/ergonomics";
+import { calculateCervicalAngle, calculateShoulderTilt, calculateHeadProjection, calculatePostureScore, calculateTrunkLean, calculateHeadPitch, classifyPosture, PostureMetrics } from "../../utils/ergonomics";
 
 
 /* ─── Circular score gauge ─── */
@@ -40,7 +40,6 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
   const { notifications, markAllRead } = useAppStore();
 
   useEffect(() => {
-    // Mark all as read when panel opens
     markAllRead();
   }, [markAllRead]);
 
@@ -133,13 +132,13 @@ export function MonitorDashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
   
-  const { cpu, ram } = useSystemMetrics();
+  const { cpu } = useSystemMetrics();
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { landmarks, analyze, isReady } = usePoseDetector(videoRef, canvasRef);
+  const { landmarks, analyze } = usePoseDetector(videoRef, canvasRef);
   
-  const { baselineProfile, sessionStats, notifications, setSessionStartTime } = useAppStore();
+  const { baselineProfile, sessionStats, notifications, setSessionStartTime, alertMode } = useAppStore();
   const [currentMetrics, setCurrentMetrics] = useState<PostureMetrics | null>(null);
 
   // Eye detection
@@ -161,12 +160,14 @@ export function MonitorDashboard() {
         shoulderTilt: calculateShoulderTilt(landmarks),
         headProjection: calculateHeadProjection(calculateCervicalAngle(landmarks)),
         trunkLean: calculateTrunkLean(landmarks),
+        headPitch: calculateHeadPitch(landmarks),
         score: calculatePostureScore(
           {
             cervicalAngle: calculateCervicalAngle(landmarks),
             shoulderTilt: calculateShoulderTilt(landmarks),
             headProjection: 0,
             trunkLean: calculateTrunkLean(landmarks),
+            headPitch: calculateHeadPitch(landmarks),
             score: 0
           }, 
           baselineProfile
@@ -183,14 +184,14 @@ export function MonitorDashboard() {
       if (currentMetrics) {
         window.api?.savePosturePoint({
           sessionId: null,
-          userId: 'local', // Use actual user ID when auth is implemented
+          userId: 'local',
           score: currentMetrics.score,
           cervicalAngle: currentMetrics.cervicalAngle,
           shoulderTilt: currentMetrics.shoulderTilt,
           isGoodPosture: currentMetrics.score >= 80,
         });
       }
-    }, 30000); // Every 30 seconds
+    }, 30000);
 
     return () => clearInterval(saveInterval);
   }, [running, currentMetrics]);
@@ -219,8 +220,6 @@ export function MonitorDashboard() {
     }
   }, []);
 
-  // Draw landmarks is now handled directly by usePoseDetector for better performance
-
   useEffect(() => {
     if (!running) return;
     const t = setInterval(() => setElapsed((s) => s + 1), 1000);
@@ -247,18 +246,50 @@ export function MonitorDashboard() {
   };
 
   const score = currentMetrics?.score || 100;
-  const postureOk = score >= 80;
-  const scoreLabel = postureOk ? "Excelente" : "Mejorable";
+  const postureState = classifyPosture(
+    currentMetrics || { cervicalAngle: 0, shoulderTilt: 0, headProjection: 0, trunkLean: 0, headPitch: 0, score: 100 }, 
+    baselineProfile, 
+    alertMode
+  );
+  const postureOk = postureState === 'recto';
+  const scoreLabel = score >= 90 ? "Excelente" : score >= 75 ? "Buena" : "Mejorable";
 
   // Count unread notifications
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // Metric helpers for pill badges
+  const cervicalOk = (currentMetrics?.cervicalAngle || 0) < 15;
+  const shoulderOk = (currentMetrics?.shoulderTilt || 0) < 8;
+  const trunkVal = currentMetrics?.trunkLean || 0;
+  const trunkOk = Math.abs(trunkVal) < 10;
+
   const metrics = [
-    { label: "Posición del cuello",     value: `+${currentMetrics?.cervicalAngle || 0}°` },
-    { label: "Nivel de los hombros",    value: `${currentMetrics?.shoulderTilt || 0}°`  },
-    { label: "Posición de la cabeza",   value: `${currentMetrics?.headProjection || 0} cm`},
-    { label: "Inclinación del tronco",  value: (currentMetrics?.trunkLean && currentMetrics.trunkLean < -5 ? "Joroba" : (currentMetrics?.trunkLean && currentMetrics.trunkLean > 5 ? "Hacia atrás" : "Recto")) },
-    { label: "Estado de ojos",          value: eyeReady ? (eyesOpen ? "Abiertos" : `Cerrados (${Math.round(closedSeconds)}s)`) : "Cargando..." },
+    {
+      label: "Posicion del cuello",
+      value: cervicalOk ? "Bien alineado" : "Muy inclinado",
+      isGood: cervicalOk,
+    },
+    {
+      label: "Nivel de hombros",
+      value: shoulderOk ? "Nivelados" : "Desnivelados",
+      isGood: shoulderOk,
+    },
+    {
+      label: "Cabeza hacia adelante",
+      value: (currentMetrics?.headProjection || 0) < 3 ? "Correcto" : "Demasiado",
+      isGood: (currentMetrics?.headProjection || 0) < 3,
+    },
+    {
+      label: "Inclinacion del tronco",
+      value: trunkOk ? "Recto" : (trunkVal < 0 ? "Joroba" : "Hacia atras"),
+      isGood: trunkOk,
+    },
+    {
+      label: "Estado de ojos",
+      value: eyeReady ? (eyesOpen ? "Abiertos" : `Cerrados (${Math.round(closedSeconds)}s)`) : "Cargando...",
+      isGood: eyesOpen,
+      isEye: true,
+    },
   ];
 
   return (
@@ -339,7 +370,7 @@ export function MonitorDashboard() {
           </div>
 
           <nav className="p-3 flex-1">
-            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">Navegacion</div>
+            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">Menu</div>
             <div className="space-y-0.5 mb-4">
               {[
                 { label: "Monitor", icon: <Monitor className="w-4 h-4" />, path: "/monitor", active: true },
@@ -360,7 +391,6 @@ export function MonitorDashboard() {
 
             <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">Sesion</div>
             <div className="space-y-0.5">
-              {/* Pause/Resume — always green, controls timer */}
               <button
                 onClick={() => setRunning((v) => !v)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors bg-green-500 hover:bg-green-600 text-white"
@@ -399,11 +429,11 @@ export function MonitorDashboard() {
         {/* ── Main ── */}
         <main className="flex-1 flex flex-col min-w-0 overflow-auto">
           <div className="p-6 flex flex-col gap-4 flex-1">
-            <h1 className="text-lg font-bold text-gray-900">Monitor en tiempo real</h1>
+            <h1 className="text-lg font-bold text-gray-900">Monitoreo activo</h1>
 
             {/* Posture banner */}
             <div className={`rounded-xl px-5 py-4 flex items-center justify-between transition-colors ${
-              !running ? "bg-gray-400" : warningActive ? "bg-red-600 animate-pulse" : postureOk ? "bg-green-500" : "bg-red-500"
+              !running ? "bg-gray-400" : warningActive ? "bg-red-600 animate-pulse" : postureState === 'recto' ? "bg-green-500" : postureState === 'atras' ? "bg-orange-500" : "bg-red-500"
             }`}>
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -411,21 +441,23 @@ export function MonitorDashboard() {
                     ? <PauseCircle className="w-4 h-4 text-white" />
                     : warningActive
                     ? <EyeOff className="w-4 h-4 text-white" />
-                    : postureOk
+                    : postureState === 'recto'
                     ? <Check className="w-4 h-4 text-white" strokeWidth={3} />
                     : <AlertTriangle className="w-4 h-4 text-white" />}
                 </div>
                 <div>
                   <div className="text-white font-bold text-sm">
-                    {!running ? "Monitor en pausa" : warningActive ? "¡Ojos cerrados detectados!" : postureOk ? "Postura Correcta" : "Postura Incorrecta"}
+                    {!running ? "Monitor en pausa" : warningActive ? "¡Ojos cerrados detectados!" : postureState === 'recto' ? "Postura Correcta" : postureState === 'atras' ? "Postura Reclinada" : "Postura Incorrecta"}
                   </div>
                   <div className="text-white/80 text-xs">
                     {!running
                       ? "Haz clic en Reanudar monitor para continuar"
                       : warningActive
-                      ? "Abre los ojos o la pantalla se bloqueará"
-                      : postureOk
+                      ? "Abre los ojos o el equipo se suspenderá"
+                      : postureState === 'recto'
                       ? "Tu columna vertebral esta correctamente alineada"
+                      : postureState === 'atras'
+                      ? "Estás demasiado reclinado hacia atrás"
                       : "Corrige tu postura: encorvamiento detectado"}
                   </div>
                 </div>
@@ -441,7 +473,7 @@ export function MonitorDashboard() {
               {/* Camera feed */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-gray-800">Vista en tiempo real</span>
+                  <span className="text-sm font-semibold text-gray-800">Camara en vivo</span>
                   <div className="flex items-center gap-3 text-xs text-gray-500">
                     <span className="font-medium text-gray-700">MediaPipe Pose</span>
                     <span className={`flex items-center gap-1 font-semibold ${running ? "text-green-600" : "text-gray-400"}`}>
@@ -477,28 +509,45 @@ export function MonitorDashboard() {
 
               {/* Right panel */}
               <div className="w-64 flex-shrink-0 flex flex-col gap-3">
-                <div className="bg-white rounded-xl border border-gray-200 p-4 flex justify-center">
+                <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col items-center gap-2">
                   <ScoreGauge score={running ? score : 0} label={running ? scoreLabel : "Pausado"} />
+                  {running && (
+                    <div className={`w-full text-center text-[11px] font-semibold px-3 py-1.5 rounded-lg ${
+                      score >= 90 ? "bg-green-50 text-green-700" : score >= 75 ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-600"
+                    }`}>
+                      {score >= 90 ? "Excelente — sigue así" : score >= 75 ? "Buena — pequeñas correcciones" : "Mejorable — corrige tu postura"}
+                    </div>
+                  )}
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Metricas en vivo</div>
+                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Como estas ahora</div>
                   <div className="space-y-2.5">
-                    {metrics.map(({ label, value }) => (
-                      <div key={label} className="flex items-center justify-between">
-                        <span className="text-xs text-gray-600">{label}</span>
-                        <span className={`text-xs font-bold ${
-                          !running ? "text-gray-300" : 
-                          label === "Estado de ojos" ? (eyesOpen ? "text-green-600" : warningActive ? "text-red-500 animate-pulse" : "text-yellow-600") :
-                          "text-[#0033CC]"
-                        }`}>
-                          {running ? value : "--"}
-                        </span>
+                    {metrics.map(({ label, value, isGood, isEye }) => (
+                      <div key={label} className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-gray-600 flex-1">{label}</span>
+                        {running ? (
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                            isEye
+                              ? (isGood ? "bg-green-100 text-green-700" : warningActive ? "bg-red-100 text-red-600 animate-pulse" : "bg-yellow-100 text-yellow-700")
+                              : isGood ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                          }`}>
+                            {isGood && !isEye ? "✓ " : !isGood && !isEye ? "⚠ " : ""}{value}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-300">--</span>
+                        )}
                       </div>
                     ))}
                   </div>
+                  {running && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-3 text-[10px] text-gray-400">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Correcto</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Necesita ajuste</span>
+                    </div>
+                  )}
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Hoy</div>
+                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Resumen de hoy</div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-red-50 rounded-lg p-3 text-center">
                       <div className="text-2xl font-bold text-red-500">{sessionStats?.alertsToday || 0}</div>
@@ -525,19 +574,6 @@ export function MonitorDashboard() {
             </div>
           </div>
         </main>
-      </div>
-
-      {/* ── Bottom bar ── */}
-      <div className="bg-white border-t border-gray-200 flex items-center justify-between px-6 py-2 flex-shrink-0">
-        <div className="flex items-center gap-4 text-gray-400 text-[11px]">
-          <span>&#x25CF; DERECHITO v1.0</span>
-          <span>&#x25CF; CPU: {cpu}% - RAM: {ram.usedMB} MB</span>
-          <span>&#x25CF; MediaPipe Pose {isReady ? 'Ready' : 'Loading'} - 30 fps</span>
-          <span>&#x25CF; Face {eyeReady ? 'Ready' : 'Loading'}</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-green-500 text-[11px] font-medium">
-          <Cloud className="w-3 h-3" /> Sync activo
-        </div>
       </div>
 
       {showLogout && (

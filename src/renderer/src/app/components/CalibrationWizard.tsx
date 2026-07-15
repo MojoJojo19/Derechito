@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { usePoseDetector } from "../../hooks/usePoseDetector";
 import { useAppStore } from "../../store/useAppStore";
-import { calculateCervicalAngle, calculateShoulderTilt, calculateHeadProjection, PostureMetrics } from "../../utils/ergonomics";
+import { calculateCervicalAngle, calculateShoulderTilt, calculateHeadProjection, calculateHeadPitch, PostureMetrics } from "../../utils/ergonomics";
 
 type Step = 1 | 2 | 3;
 
@@ -443,6 +443,7 @@ export function CalibrationWizard() {
         shoulderTilt: calculateShoulderTilt(landmarks),
         headProjection: calculateHeadProjection(calculateCervicalAngle(landmarks)),
         trunkLean: 0,
+        headPitch: calculateHeadPitch(landmarks),
         score: 100 // baseline is 100 by definition
       });
     }

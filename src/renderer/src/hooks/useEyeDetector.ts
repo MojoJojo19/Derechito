@@ -164,16 +164,16 @@ export function useEyeDetector(
             
             addNotification({
               type: 'info',
-              title: 'Pantalla bloqueada',
-              body: `Se detectaron ojos cerrados por más de ${thresholdSeconds}s. La pantalla fue bloqueada.`,
+              title: 'Equipo suspendido',
+              body: `Se detectaron ojos cerrados por más de ${thresholdSeconds}s. El equipo se suspendió.`,
             })
             
-            // Call IPC to lock screen
-            if (window.api?.lockScreen) {
-              window.api.lockScreen()
+            // Call IPC to suspend PC
+            if (window.api?.suspendPC) {
+              window.api.suspendPC()
             }
             
-            toast.info('Pantalla bloqueada', {
+            toast.info('Equipo suspendido', {
               description: 'Se detectaron ojos cerrados prolongadamente.',
               duration: 5000,
             })

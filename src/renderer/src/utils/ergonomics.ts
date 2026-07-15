@@ -13,6 +13,7 @@ export interface PostureMetrics {
   shoulderTilt: number;
   headProjection: number; // approximate cm
   trunkLean: number; // Inclinación del tronco: < 0 joroba, > 0 inclinado atrás
+  headPitch: number; // < 0 mirando abajo, > 0 mirando arriba
   score: number;
 }
 
@@ -185,11 +186,67 @@ export function calculateTrunkLean(landmarks: NormalizedLandmark[]): number {
 }
 
 /**
+ * Calculates head pitch (looking up/down).
+ * Returns approximate angle in degrees. >0 means looking up, <0 means looking down.
+ */
+export function calculateHeadPitch(landmarks: NormalizedLandmark[]): number {
+  if (landmarks.length < 13) return 0; // need nose, ears, shoulders
+  
+  const nose = landmarks[0];
+  const leftEar = landmarks[7];
+  const rightEar = landmarks[8];
+  const leftShoulder = landmarks[11];
+  const rightShoulder = landmarks[12];
+
+  if (!isVisible(nose)) return 0;
+
+  // Averaged ear Y
+  let earY: number;
+  if (isVisible(leftEar) && isVisible(rightEar)) {
+    earY = (leftEar.y + rightEar.y) / 2;
+  } else if (isVisible(leftEar)) {
+    earY = leftEar.y;
+  } else if (isVisible(rightEar)) {
+    earY = rightEar.y;
+  } else {
+    return 0; // no ears visible
+  }
+
+  // Averaged shoulder Y (for normalization)
+  let shoulderY: number;
+  if (isVisible(leftShoulder) && isVisible(rightShoulder)) {
+    shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+  } else if (isVisible(leftShoulder)) {
+    shoulderY = leftShoulder.y;
+  } else if (isVisible(rightShoulder)) {
+    shoulderY = rightShoulder.y;
+  } else {
+    return 0;
+  }
+  
+  const neckLen = Math.abs(shoulderY - earY);
+  if (neckLen < 0.01) return 0;
+  
+  // noseToEarDy: positive if nose is above ear (looking up)
+  const noseToEarDy = earY - nose.y; 
+  
+  const pitchRatio = noseToEarDy / neckLen;
+  
+  // Base normalization (0 ratio = nose level with ears)
+  // Normally looking straight = pitchRatio around -0.1 to 0.1 depending on camera height.
+  // Multiply by 90 for rough degrees conversion.
+  const pitchDegrees = pitchRatio * 90;
+  
+  return parseFloat(pitchDegrees.toFixed(1));
+}
+
+
+/**
  * Calculates an overall posture score (0-100) based on deviation from a baseline.
  */
 export function calculatePostureScore(current: PostureMetrics, baseline: PostureMetrics | null): number {
   // If no baseline is captured, we evaluate against an "absolute ideal" (0 degrees deviation).
-  const ref = baseline || { cervicalAngle: 0, shoulderTilt: 0, headProjection: 0, trunkLean: 0, score: 100 };
+  const ref = baseline || { cervicalAngle: 0, shoulderTilt: 0, headProjection: 0, trunkLean: 0, headPitch: 0, score: 100 };
 
   let score = 100;
 
@@ -205,5 +262,44 @@ export function calculatePostureScore(current: PostureMetrics, baseline: Posture
   const trunkDiff = Math.abs(current.trunkLean - (ref.trunkLean || 0));
   if (trunkDiff > 5) score -= (trunkDiff - 5) * 1.5;
 
+  // Penalize for head pitch (looking up/down excessively)
+  const pitchDiff = current.headPitch - (ref.headPitch || 0);
+  if (Math.abs(pitchDiff) > 12) score -= (Math.abs(pitchDiff) - 12) * 1.5;
+
   return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+/**
+ * Classifies the current posture into 3 specific states based on the user's metrics vs baseline.
+ * 
+ * - 'jorobado': Forward neck (high cervical angle) OR forward trunk lean.
+ * - 'atras': Excessive backward trunk lean.
+ * - 'recto': Ergonomic posture within acceptable thresholds.
+ */
+export function classifyPosture(
+  current: PostureMetrics, 
+  baseline: PostureMetrics | null,
+  alertMode: 'standard' | 'rigorous' = 'standard'
+): 'recto' | 'jorobado' | 'atras' {
+  const ref = baseline || { cervicalAngle: 0, shoulderTilt: 0, headProjection: 0, trunkLean: 0, headPitch: 0, score: 100 };
+  
+  const cervicalDev = current.cervicalAngle - ref.cervicalAngle;
+  // trunkLean: < 0 is leaning forward (joroba), > 0 is leaning back
+  const trunkLeanDev = current.trunkLean - (ref.trunkLean || 0);
+  
+  // If leaning back excessively
+  if (trunkLeanDev > 12) {
+    return 'atras';
+  }
+  
+  // Strictness thresholds based on mode
+  const trunkThreshold = alertMode === 'rigorous' ? -4 : -8;
+  const cervicalThreshold = alertMode === 'rigorous' ? 8 : 12;
+
+  // If leaning forward excessively (trunk) or head/neck is too far forward
+  if (trunkLeanDev < trunkThreshold || cervicalDev > cervicalThreshold) {
+    return 'jorobado';
+  }
+  
+  return 'recto';
 }

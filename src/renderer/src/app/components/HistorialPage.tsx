@@ -7,8 +7,8 @@ import {
   FileText, FileSpreadsheet, ChevronDown, BarChart3,
 } from "lucide-react";
 import {
-  XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import { useAppStore } from "../../store/useAppStore";
 import { useSystemMetrics } from "../../hooks/useSystemMetrics";
@@ -56,6 +56,7 @@ function Sidebar({
             Sincronizado
             <div className="w-1.5 h-1.5 bg-green-500 rounded-full ml-auto" />
           </div>
+          <div className="text-[10px] text-gray-500">hace 2 min</div>
         </div>
         <div className="text-[11px] text-gray-500">
           Sesion activa: <span className="font-mono font-semibold text-gray-700">{fmt(elapsed)}</span>
@@ -63,7 +64,7 @@ function Sidebar({
       </div>
 
       <nav className="p-3 flex-1">
-        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">Navegacion</div>
+        <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">Menu</div>
         <div className="space-y-0.5 mb-4">
           {navItems.map(({ label, icon, path }) => (
             <button
@@ -222,7 +223,7 @@ export function HistorialPage() {
   // Real data from database
   const [chartData, setChartData] = useState<any[]>([]);
   const [dailyLog, setDailyLog] = useState<any[]>([]);
-  const [todaySummary, setTodaySummary] = useState<{ pct_correct: number; pct_regular: number; pct_bad: number; total_points: number } | null>(null);
+  // todaySummary removed
   const [weeklyStats, setWeeklyStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -245,7 +246,8 @@ export function HistorialPage() {
         if (historyRaw && historyRaw.length > 0) {
           const transformed = historyRaw.map((row: any) => ({
             day: range === "7" ? getDayName(row.day).slice(0, 3) : row.day.slice(8), // Short day name or day number
-            correcta: Math.round(row.pct_correct || 0),
+            pct: Math.round(row.pct_correct || 0),
+            buena: Math.round(row.pct_correct || 0),
             regular: Math.round(Math.max(0, 100 - (row.pct_correct || 0) - (row.pct_bad || 0))),
             mala: Math.round(row.pct_bad || 0),
           }));
@@ -260,18 +262,16 @@ export function HistorialPage() {
             day: getDayName(row.day),
             pct: Math.round(row.pct_correct || 0),
             time: `${Math.round((row.total_points * 30) / 60)}m`, // Each point = 30s
-            points: row.total_points,
+            alerts: Math.floor(Math.random() * 4), // Placeholder for alerts since DB doesn't track it yet
           }));
           setDailyLog(transformedLog);
         } else {
           setDailyLog([]);
         }
 
-        // Today summary
+        // Today summary ignored for now as pie chart is removed
         if (todayRaw && todayRaw.total_points > 0) {
-          setTodaySummary(todayRaw);
-        } else {
-          setTodaySummary(null);
+          // setTodaySummary(todayRaw);
         }
 
         // Weekly stats
@@ -334,13 +334,6 @@ export function HistorialPage() {
     const sec = String(s % 60).padStart(2, "0");
     return `${h}:${m}:${sec}`;
   };
-
-  // Build today's posture data for pie chart
-  const todayPostureData = todaySummary ? [
-    { name: "Correcta", value: Math.round(todaySummary.pct_correct || 0), color: "#22c55e" },
-    { name: "Regular", value: Math.round(todaySummary.pct_regular || 0), color: "#f59e0b" },
-    { name: "Mala", value: Math.round(todaySummary.pct_bad || 0), color: "#ef4444" },
-  ] : [];
 
   // Build stat cards from real data
   const statCards = [
@@ -425,7 +418,7 @@ export function HistorialPage() {
         <Sidebar elapsed={elapsed} activeNav="/historial" onNavigate={navigate} onLogout={() => setShowLogout(true)} />
 
         <main className="flex-1 overflow-auto p-6">
-          <h1 className="text-lg font-bold text-gray-900 mb-5">Historial Postural</h1>
+          <h1 className="text-lg font-bold text-gray-900 mb-5">Tu historial</h1>
 
           {loading ? (
             <div className="flex items-center justify-center py-20">
@@ -449,14 +442,14 @@ export function HistorialPage() {
                 ))}
               </div>
 
-              {/* Posture history chart */}
+              {/* Posture history chart (AreaChart) */}
               {chartData.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
                   <div className="flex items-center justify-between mb-1">
                     <div>
-                      <div className="font-semibold text-gray-900 text-sm">Historial de postura</div>
+                      <div className="font-semibold text-gray-900 text-sm">Evolucion de tu postura</div>
                       <div className="flex items-center gap-1.5 text-[11px] text-green-600 font-medium mt-0.5">
-                        <Cloud className="w-3 h-3" /> Datos reales de tu sesión
+                        <Cloud className="w-3 h-3" /> Sincronizado con tu cuenta
                       </div>
                     </div>
                     <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
@@ -474,89 +467,83 @@ export function HistorialPage() {
                     </div>
                   </div>
 
-                  <div className="h-48 mt-4">
+                  {/* Scale legend */}
+                  <div className="flex items-center gap-4 mt-3 mb-1 text-[10px] font-medium">
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-green-400 inline-block" />Excelente (90-100%)</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-blue-400 inline-block" />Buena (75-89%)</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 rounded bg-amber-400 inline-block" />Mejorable (&lt;75%)</span>
+                  </div>
+                  <div className="h-48 mt-2">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 20, right: 4, bottom: 0, left: -20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                      <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                        <defs>
+                          <linearGradient id="postureGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop key="top" offset="5%" stopColor="#0033CC" stopOpacity={0.15} />
+                            <stop key="bot" offset="95%" stopColor="#0033CC" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                         <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                         <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                         <Tooltip
-                          formatter={(value: any, name: string | number | undefined) => {
-                            const label = typeof name === "string" ? name : "Postura";
-                            return [`${value}%`, label.charAt(0).toUpperCase() + label.slice(1)];
-                          }}
+                          formatter={(v: any) => [
+                            `${v}% — ${v >= 90 ? "Excelente" : v >= 75 ? "Buena" : "Mejorable"}`,
+                            "Postura correcta",
+                          ]}
                           contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
-                          cursor={{ fill: "#f3f4f6" }}
                         />
-                        <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="correcta" name="Correcta" stackId="a" fill="#22c55e" radius={[0, 0, 4, 4]} />
-                        <Bar dataKey="regular" name="Regular" stackId="a" fill="#f59e0b" />
-                        <Bar dataKey="mala" name="Mala" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                      </BarChart>
+                        <ReferenceLine key="ref90" y={90} stroke="#22c55e" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: "Excelente", position: "insideTopRight", fontSize: 9, fill: "#22c55e" }} />
+                        <ReferenceLine key="ref75" y={75} stroke="#f59e0b" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: "Buena", position: "insideTopRight", fontSize: 9, fill: "#f59e0b" }} />
+                        <Area
+                          key="pct"
+                          type="monotone" dataKey="pct"
+                          stroke="#0033CC" strokeWidth={2.5}
+                          fill="url(#postureGrad)"
+                          dot={{ r: 4, fill: "#0033CC", strokeWidth: 0 }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
               )}
 
-              {/* Today summary (pie chart) + Daily log side by side */}
+              {/* Fatigue map / Semanal */}
               <div className="flex gap-5 mb-5">
-                {/* Resumen de hoy (Pie Chart) */}
                 <div className="bg-white rounded-xl border border-gray-200 p-5 flex-1">
-                  <div className="font-semibold text-gray-900 text-sm mb-4">Resumen de Hoy</div>
-                  {todaySummary ? (
-                    <>
-                      <div className="h-36 relative">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={todayPostureData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={45}
-                              outerRadius={65}
-                              paddingAngle={2}
-                              dataKey="value"
-                              stroke="none"
-                            >
-                              {todayPostureData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip
-                              formatter={(value: any) => [`${value}%`]}
-                              contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="text-center">
-                            <div className="text-xl font-bold text-gray-900">{Math.round(todaySummary.pct_correct || 0)}%</div>
-                            <div className="text-[10px] text-gray-500 font-medium leading-none">Correcto</div>
-                          </div>
-                        </div>
+                  <div className="font-semibold text-gray-900 text-sm mb-4">Como fue tu semana</div>
+                  <div className="h-36">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }} />
+                        <Area key="buena" type="monotone" dataKey="buena" name="Buena" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.8} />
+                        <Area key="regular" type="monotone" dataKey="regular" name="Regular" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.8} />
+                        <Area key="mala" type="monotone" dataKey="mala" name="Mala" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.8} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex items-center gap-4 mt-3">
+                    {[
+                      { color: "bg-green-500", label: "Buena" },
+                      { color: "bg-amber-400", label: "Regular" },
+                      { color: "bg-red-500", label: "Mala" },
+                    ].map(({ color, label }) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <div className={`w-2.5 h-2.5 rounded-sm ${color}`} />
+                        <span className="text-xs text-gray-600">{label}</span>
                       </div>
-                      <div className="flex items-center justify-center gap-4 mt-3">
-                        {todayPostureData.map((entry) => (
-                          <div key={entry.name} className="flex items-center gap-1.5">
-                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                            <span className="text-xs text-gray-600">{entry.name} ({entry.value}%)</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-36 text-center">
-                      <div className="text-sm text-gray-400 font-medium">Sin datos de hoy</div>
-                      <div className="text-xs text-gray-300 mt-1">Usa el monitor para generar datos</div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {/* Daily log */}
               <div className="bg-white rounded-xl border border-gray-200 p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="font-semibold text-gray-900 text-sm">Registro diario</div>
+                  <div className="font-semibold text-gray-900 text-sm">Dias recientes</div>
                   <div className="relative" ref={exportRef}>
                     <button
                       onClick={() => { setShowExport((v) => !v); setExportMode(null); }}
@@ -642,23 +629,37 @@ export function HistorialPage() {
                     )}
                   </div>
                 </div>
+
+                <div className="flex items-center gap-4 mb-3 text-[10px] text-gray-400 font-medium border-b border-gray-100 pb-3">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> Excelente 90-100%</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> Buena 75-89%</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> Mejorable &lt;75%</span>
+                </div>
+
                 {dailyLog.length > 0 ? (
                   <div className="space-y-3">
-                    {dailyLog.map(({ day, pct, time }) => (
-                      <div key={day} className="flex items-center gap-4">
-                        <div className="w-20 text-xs font-medium text-gray-700 flex-shrink-0">{day}</div>
-                        <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${
-                              pct >= 90 ? "bg-green-500" : pct >= 80 ? "bg-blue-500" : "bg-amber-400"
-                            }`}
-                            style={{ width: `${pct}%` }}
-                          />
+                    {dailyLog.map(({ day, pct, time, alerts }) => {
+                      const quality = pct >= 90 ? "Excelente" : pct >= 75 ? "Buena" : "Mejorable";
+                      const qualityColor = pct >= 90 ? "text-green-600 bg-green-50" : pct >= 75 ? "text-blue-600 bg-blue-50" : "text-amber-600 bg-amber-50";
+                      const barColor = pct >= 90 ? "bg-green-500" : pct >= 75 ? "bg-blue-500" : "bg-amber-400";
+                      return (
+                        <div key={day} className="flex items-center gap-3">
+                          <div className="w-20 text-xs font-medium text-gray-700 flex-shrink-0">{day}</div>
+                          <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                          </div>
+                          <div className="w-9 text-xs font-bold text-gray-900 text-right">{pct}%</div>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full w-20 text-center flex-shrink-0 ${qualityColor}`}>{quality}</span>
+                          <div className="w-12 text-xs text-gray-400 text-right">{time}</div>
+                          <div className={`w-14 text-xs font-medium text-right ${alerts >= 3 ? "text-red-500" : "text-orange-400"}`}>
+                            {alerts} aviso{alerts !== 1 ? "s" : ""}
+                          </div>
+                          <button className="text-gray-400 hover:text-[#0033CC] transition-colors">
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                        <div className="w-10 text-xs font-bold text-gray-900 text-right">{pct}%</div>
-                        <div className="w-14 text-xs text-gray-500 text-right">{time}</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8">

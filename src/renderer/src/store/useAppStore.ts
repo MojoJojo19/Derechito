@@ -12,6 +12,13 @@ export interface AppNotification {
 }
 
 interface AppState {
+  // User Configuration
+  userProfile: { name: string; email: string };
+  setUserProfile: (profile: { name: string; email: string }) => void;
+  
+  alertMode: 'standard' | 'rigorous';
+  setAlertMode: (mode: 'standard' | 'rigorous') => void;
+
   baselineProfile: PostureMetrics | null;
   setBaselineProfile: (profile: PostureMetrics) => void;
   clearBaseline: () => void;
@@ -44,6 +51,12 @@ function getTodayStr() {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
+      userProfile: { name: 'Demo', email: 'demo@derechito.app' },
+      setUserProfile: (profile) => set({ userProfile: profile }),
+      
+      alertMode: 'standard',
+      setAlertMode: (mode) => set({ alertMode: mode }),
+
       baselineProfile: null,
       setBaselineProfile: (profile) => set({ baselineProfile: profile }),
       clearBaseline: () => set({ baselineProfile: null }),

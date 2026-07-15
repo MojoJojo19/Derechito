@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { PostureMetrics } from '../utils/ergonomics';
+import { PostureMetrics, classifyPosture } from '../utils/ergonomics';
 import { useAppStore } from '../store/useAppStore';
 import { toast } from 'sonner';
 
@@ -7,9 +7,9 @@ export function usePostureAlert(
   currentMetrics: PostureMetrics | null,
   isRunning: boolean
 ) {
-  const { baselineProfile, incrementAlerts, addSessionTime, addNotification } = useAppStore();
+  const { baselineProfile, alertMode, incrementAlerts, addSessionTime, addNotification } = useAppStore();
   
-  // Track consecutive seconds of bad posture
+  // Track consecutive seconds of being "jorobado"
   const badPostureSeconds = useRef(0);
   const lastUpdate = useRef(Date.now());
   
@@ -17,9 +17,6 @@ export function usePostureAlert(
   const continuousMinutes = useRef(0);
   const lastPauseAlert = useRef(0); // timestamp of last pause alert
   
-  // 15 degrees deviation for 10 consecutive seconds = ALERT
-  const ANGLE_THRESHOLD = 15;
-  const TIME_THRESHOLD_SEC = 10;
   const PAUSE_THRESHOLD_MIN = 120; // 2 hours
 
   useEffect(() => {
@@ -27,8 +24,6 @@ export function usePostureAlert(
       lastUpdate.current = Date.now();
       return;
     }
-
-    const ref = baselineProfile || { cervicalAngle: 0, shoulderTilt: 0, headProjection: 0, trunkLean: 0, score: 100 };
 
     const now = Date.now();
     const dt = now - lastUpdate.current; // elapsed time in ms
@@ -62,40 +57,29 @@ export function usePostureAlert(
       }
     }
 
-    // Check deviation
-    const cervicalDev = Math.abs(currentMetrics.cervicalAngle - ref.cervicalAngle);
-    const trunkLeanDev = currentMetrics.trunkLean || 0; // Negative means joroba, positive means back
-    
-    const isBadCervical = cervicalDev > ANGLE_THRESHOLD;
-    const isBadTrunkLean = Math.abs(trunkLeanDev) > 10;
-    
-    const isBadPosture = isBadCervical || isBadTrunkLean;
+    // Determine the time threshold based on configuration
+    const timeThresholdSec = alertMode === 'rigorous' ? 3 : 15;
 
-    // Add time to session stats
-    addSessionTime(!isBadPosture, dt);
+    // Classify posture
+    const postureState = classifyPosture(currentMetrics, baselineProfile, alertMode);
+    
+    // Add time to session stats (consider 'atras' as correct time for stats, only punish 'jorobado')
+    const isGood = postureState === 'recto' || postureState === 'atras';
+    addSessionTime(isGood, dt);
 
-    if (isBadPosture) {
+    // Only trigger active alerts if the user is explicitly "Jorobado"
+    if (postureState === 'jorobado') {
       badPostureSeconds.current += (dt / 1000);
       
       // If we crossed the threshold
-      if (badPostureSeconds.current >= TIME_THRESHOLD_SEC) {
+      if (badPostureSeconds.current >= timeThresholdSec) {
         
-        let alertTitle = '¡Postura incorrecta detectada!';
-        let alertDesc = `Tu cuello ha estado inclinado ${Math.round(cervicalDev)}° por más de ${TIME_THRESHOLD_SEC}s. ¡Siéntate derecho!`;
-        let alertBody = `Te estás encorvando demasiado (+${Math.round(cervicalDev)}°). Endereza tu espalda.`;
+        const alertTitle = '¡Postura encorvada detectada!';
+        const alertDesc = alertMode === 'rigorous' 
+          ? `¡Detección rigurosa! Endereza tu espalda y cuello de inmediato.`
+          : `Llevas más de ${timeThresholdSec}s encorvado. ¡Siéntate derecho!`;
+        const alertBody = 'Tu cabeza o tus hombros están caídos hacia el frente.';
         
-        if (isBadTrunkLean && !isBadCervical) {
-          if (trunkLeanDev < 0) {
-            alertTitle = '¡Estás encorvado!';
-            alertDesc = 'Tu tronco está inclinado hacia adelante. ¡Endereza tu espalda!';
-            alertBody = 'Estás formando joroba. ¡Siéntate derecho!';
-          } else {
-            alertTitle = '¡Estás muy recostado!';
-            alertDesc = 'Tu tronco está inclinado hacia atrás. Mantén una postura recta.';
-            alertBody = 'Estás inclinado hacia atrás. Ajusta tu silla y siéntate bien.';
-          }
-        }
-
         // Trigger alert!
         toast.error(alertTitle, {
           description: alertDesc,
@@ -121,13 +105,13 @@ export function usePostureAlert(
         
         incrementAlerts();
         
-        // Reset counter after firing to avoid spamming
-        badPostureSeconds.current = -10; // Gives a 10s cooldown
+        // Reset counter after alert
+        badPostureSeconds.current = 0;
       }
     } else {
-      // Good posture, reset counter
-      // Slowly decay bad posture counter to allow for minor slips, or just reset
-      badPostureSeconds.current = Math.max(0, badPostureSeconds.current - (dt / 500));
+      // User corrected posture. Decrease the counter gradually instead of instant reset
+      // This prevents a single frame of jitter from resetting the entire timer.
+      badPostureSeconds.current = Math.max(0, badPostureSeconds.current - (dt / 1000) * 2);
     }
-  }, [currentMetrics, baselineProfile, isRunning, incrementAlerts, addSessionTime, addNotification]);
+  }, [currentMetrics, isRunning, alertMode, baselineProfile, addSessionTime, incrementAlerts, addNotification]);
 }
